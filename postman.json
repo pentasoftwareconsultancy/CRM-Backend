@@ -1,0 +1,399 @@
+{
+	"info": {
+		"_postman_id": "YOUR_POSTMAN_COLLECTION_ID",
+		"name": "CRM Advanced System API - V1.0",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "0. SETUP & AUTHENTICATION",
+			"item": [
+				{
+					"name": "Login (Get Token)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@test.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "login"]
+						},
+						"event": [
+							{
+								"listen": "test",
+								"script": {
+									"exec": [
+										"const json = pm.response.json();",
+										"pm.environment.set(\"token\", json.token);",
+										"pm.environment.set(\"userId\", json.user._id);",
+										"pm.environment.set(\"adminToken\", json.token);"
+									],
+									"type": "text/javascript"
+								}
+							}
+						]
+					}
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"currentPassword\": \"password123\",\n    \"newPassword\": \"newPassword456\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/change-password",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "change-password"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "1. USER MANAGEMENT (Admin)",
+			"item": [
+				{
+					"name": "Create New User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Jane Sales\",\n    \"email\": \"jane@sales.com\",\n    \"password\": \"pass123\",\n    \"role\": \"sales\",\n    \"designation\": \"Junior Sales\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/users",
+							"host": ["{{baseUrl}}"],
+							"path": ["users"]
+						}
+					}
+				},
+				{
+					"name": "Get All Users (Filter by role)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/users?role=sales",
+							"host": ["{{baseUrl}}"],
+							"path": ["users"],
+							"query": [
+								{ "key": "role", "value": "sales" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Deactivate User",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/users/{{salesUserId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["users", "{{salesUserId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. LEAD MANAGEMENT",
+			"item": [
+				{
+					"name": "Create Lead",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"New Prospect Co\",\n    \"company\": \"XYZ Inc\",\n    \"email\": \"prospect@xyz.com\",\n    \"phone\": \"9876543210\",\n    \"source\": \"website\",\n    \"budget\": 15000\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/leads",
+							"host": ["{{baseUrl}}"],
+							"path": ["leads"]
+						},
+						"event": [
+							{
+								"listen": "test",
+								"script": {
+									"exec": [
+										"pm.environment.set(\"leadId\", pm.response.json().lead._id);"
+									],
+									"type": "text/javascript"
+								}
+							}
+						]
+					}
+				},
+				{
+					"name": "Get Leads (Filter & Pagination)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/leads?limit=10&page=1&status=new",
+							"host": ["{{baseUrl}}"],
+							"path": ["leads"],
+							"query": [
+								{ "key": "limit", "value": "10" },
+								{ "key": "page", "value": "1" },
+								{ "key": "status", "value": "new" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Lead (Set Status/Budget)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"qualified\",\n    \"budget\": 20000\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/leads/{{leadId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["leads", "{{leadId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "3. DEALS & PIPELINE",
+			"item": [
+				{
+					"name": "Create Deal",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"leadId\": \"{{leadId}}\",\n    \"title\": \"CRM Implementation Q4\",\n    \"value\": 20000,\n    \"expectedCloseDate\": \"2024-12-31\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/deals",
+							"host": ["{{baseUrl}}"],
+							"path": ["deals"]
+						},
+						"event": [
+							{
+								"listen": "test",
+								"script": {
+									"exec": [
+										"pm.environment.set(\"dealId\", pm.response.json().deal._id);"
+									],
+									"type": "text/javascript"
+								}
+							}
+						]
+					}
+				},
+				{
+					"name": "Update Deal Stage (Kanban Drag)",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"stage\": \"PROPOSAL_SENT\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/deals/{{dealId}}/stage",
+							"host": ["{{baseUrl}}"],
+							"path": ["deals", "{{dealId}}", "stage"]
+						}
+					}
+				},
+				{
+					"name": "Close Deal (WON)",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"WON\",\n    \"reason\": \"Client approved proposal on first attempt.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/deals/{{dealId}}/close",
+							"host": ["{{baseUrl}}"],
+							"path": ["deals", "{{dealId}}", "close"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. FOLLOW-UPS & NOTES",
+			"item": [
+				{
+					"name": "Schedule Follow-up (POST /leads/:leadId/followups)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"type\": \"meeting\",\n    \"scheduledAt\": \"2024-10-25T10:00:00.000Z\",\n    \"note\": \"Discuss implementation details.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/leads/{{leadId}}/followups",
+							"host": ["{{baseUrl}}"],
+							"path": ["leads", "{{leadId}}", "followups"]
+						},
+						"event": [
+							{
+								"listen": "test",
+								"script": {
+									"exec": [
+										"pm.environment.set(\"followUpId\", pm.response.json().followup._id);"
+									],
+									"type": "text/javascript"
+								}
+							}
+						]
+					}
+				},
+				{
+					"name": "Get Pending Follow-ups (GET /followups)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/followups?status=pending",
+							"host": ["{{baseUrl}}"],
+							"path": ["followups"]
+						}
+					}
+				},
+				{
+					"name": "Add Note to Lead",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"content\": \"Client seems interested but needs budget approval.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/leads/{{leadId}}/notes",
+							"host": ["{{baseUrl}}"],
+							"path": ["leads", "{{leadId}}", "notes"]
+						}
+					}
+				},
+				{
+					"name": "Get Activity Timeline (FR-25)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/leads/{{leadId}}/activities",
+							"host": ["{{baseUrl}}"],
+							"path": ["leads", "{{leadId}}", "activities"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "5. CUSTOMERS & REPORTS",
+			"item": [
+				{
+					"name": "Get Customer List (7.1)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/customers",
+							"host": ["{{baseUrl}}"],
+							"path": ["customers"]
+						}
+					}
+				},
+				{
+					"name": "Get Reports Overview (8.1)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/reports/overview?from=2024-01-01&to=2024-12-31",
+							"host": ["{{baseUrl}}"],
+							"path": ["reports", "overview"],
+							"query": [
+								{ "key": "from", "value": "2024-01-01" },
+								{ "key": "to", "value": "2024-12-31" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Sales Performance (8.2)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer {{adminToken}}" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/reports/sales-performance?from=2024-01-01&to=2024-12-31",
+							"host": ["{{baseUrl}}"],
+							"path": ["reports", "sales-performance"]
+						}
+					}
+				}
+			]
+		}
+	]
+}
