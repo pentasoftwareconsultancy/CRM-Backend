@@ -10,6 +10,7 @@ import Deal from '../models/Deal.model.js';
  */
 export const createCustomerFromDeal = async (dealId) => {
     const deal = await Deal.findById(dealId).populate('lead');
+    console.log(deal);
 
     if (!deal || deal.stage !== 'WON' || !deal.lead) {
         throw new Error('Deal is not won or missing lead data.');
@@ -63,6 +64,7 @@ export const getCustomers = async (req, res) => {
 
         res.json(customers);
     } catch (error) {
+           console.error(error);
         res.status(500).json({ message: 'Error fetching customers' });
     }
 };
@@ -89,6 +91,7 @@ export const getCustomerById = async (req, res) => {
         
         res.json(customer);
     } catch (error) {
+           console.error(error);
         res.status(500).json({ message: 'Error fetching customer' });
     }
 };
@@ -120,6 +123,7 @@ export const updateCustomer = async (req, res) => {
             customer: updatedCustomer
         });
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };
@@ -135,6 +139,7 @@ export const manualCreateCustomer = async (req, res) => {
         });
         res.status(201).json({ message: 'Customer created manually', customer });
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };
