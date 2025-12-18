@@ -12,8 +12,17 @@ export const getFollowUps = async (req, res) => {
     const { status, from, to, assignedTo } = req.query;
     const filters = { lead: { $exists: true } }; // Ensure it's a lead/deal follow-up
 
-    // Default status: pending (and overdue)
-    filters.status = status || 'pending';
+    // Handle Status Filtering (FIXED LOGIC HERE)
+    if (status) {
+        // Split the statuses by the pipe (|) and use $in for multiple values
+        const statusArray = status.split('|').filter(s => s); // Filter out empty strings
+        if (statusArray.length > 0) {
+            filters.status = { $in: statusArray };
+        }
+    } else {
+        // Default behavior if no status provided
+        filters.status = 'pending';
+    }
     
     // Role-based filtering
     if (req.user.role === 'sales') {
@@ -47,6 +56,7 @@ export const getFollowUps = async (req, res) => {
         // FR-21: (The dashboard visibility is a front-end concern, but this provides the data)
         res.json(result);
     } catch (error) {
+           console.error(error);
         res.status(500).json({ message: 'Error fetching follow-ups' });
     }
 };
@@ -73,6 +83,7 @@ export const createFollowUp = async (req, res) => {
             followup: { _id: followUp._id, status: followUp.status }
         });
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };
@@ -119,6 +130,7 @@ export const completeFollowUp = async (req, res) => {
         });
 
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };
@@ -155,6 +167,7 @@ export const addNote = async (req, res) => {
             note: note
         });
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };
@@ -190,6 +203,7 @@ export const deleteNote = async (req, res) => {
         await note.deleteOne();
         res.json({ message: 'Note deleted successfully' });
     } catch (error) {
+           console.error(error);
         res.status(500).json({ message: 'Error deleting note' });
     }
 };
@@ -246,6 +260,7 @@ export const getLeadActivities = async (req, res) => {
         res.json(allActivities);
 
     } catch (error) {
+           console.error(error);
         res.status(500).json({ message: 'Error fetching activities' });
     }
 };
