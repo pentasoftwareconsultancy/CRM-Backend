@@ -32,6 +32,7 @@ export const getUsers = async (req, res) => {
         const users = await User.find(filters).select('-password');
         res.json(users);
     } catch (error) {
+           console.error(error);
         res.status(500).json({ message: 'Error fetching users' });
     }
 };
@@ -58,6 +59,7 @@ export const createUser = async (req, res) => {
             user: user
         });
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };
@@ -104,6 +106,7 @@ export const updateUser = async (req, res) => {
         });
 
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };

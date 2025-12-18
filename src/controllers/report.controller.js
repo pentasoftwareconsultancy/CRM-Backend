@@ -11,11 +11,26 @@ const getFilterDates = (query) => {
     return dateFilter;
 };
 
+// Helper function to build the query object correctly
+const buildQuery = (baseFilters, dateFilter) => {
+    const query = { ...baseFilters };
+    if (Object.keys(dateFilter).length > 0) {
+        query.createdAt = dateFilter;
+    }
+    return query;
+};
+
 // @desc    Get system overview report (8.1 GET /reports/overview)
 // @route   GET /api/reports/overview
 // @access  Admin, Manager
 export const getOverviewReport = async (req, res) => {
     const dateFilter = getFilterDates(req.query);
+    
+    // Construct Lead queries using the helper
+    const newLeadsQuery = buildQuery({ isDeleted: false }, dateFilter);
+    
+    // Deal queries use 'closedAt' which is a Date, so we apply the filter directly to closedAt
+    const closedAtQuery = Object.keys(dateFilter).length > 0 ? { closedAt: dateFilter } : {};
 
     try {
         const [
@@ -26,16 +41,27 @@ export const getOverviewReport = async (req, res) => {
             pipelineValue,
             wonValue
         ] = await Promise.all([
+            // 1. Total Leads (No date filter)
             Lead.countDocuments({ isDeleted: false }),
-            Lead.countDocuments({ createdAt: dateFilter, isDeleted: false }),
-            Deal.countDocuments({ stage: 'WON', closedAt: dateFilter }),
-            Deal.countDocuments({ stage: 'LOST', closedAt: dateFilter }),
+            
+            // 2. New Leads (Date filter applied to createdAt)
+            Lead.countDocuments(newLeadsQuery),
+            
+            // 3. Won Deals Count (Date filter applied to closedAt)
+            Deal.countDocuments({ stage: 'WON', ...closedAtQuery }),
+            
+            // 4. Lost Deals Count (Date filter applied to closedAt)
+            Deal.countDocuments({ stage: 'LOST', ...closedAtQuery }),
+            
+            // 5. Pipeline Value (No date filter on creation/closing, only filtering for open deals)
             Deal.aggregate([
                 { $match: { stage: { $nin: ['WON', 'LOST'] } } },
                 { $group: { _id: null, total: { $sum: '$value' } } }
             ]),
+            
+            // 6. Won Value (Date filter applied to closedAt)
             Deal.aggregate([
-                { $match: { stage: 'WON', closedAt: dateFilter } },
+                { $match: { stage: 'WON', ...closedAtQuery } },
                 { $group: { _id: null, total: { $sum: '$value' } } }
             ])
         ]);
@@ -49,6 +75,7 @@ export const getOverviewReport = async (req, res) => {
             wonValue: wonValue[0] ? wonValue[0].total : 0
         });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: 'Error generating overview report' });
     }
 };
@@ -58,6 +85,8 @@ export const getOverviewReport = async (req, res) => {
 // @access  Admin, Manager
 export const getSalesPerformanceReport = async (req, res) => {
     const dateFilter = getFilterDates(req.query);
+    const leadsQuery = buildQuery({ isDeleted: false }, dateFilter);
+    const closedAtQuery = Object.keys(dateFilter).length > 0 ? { closedAt: dateFilter } : {};
 
     try {
         const salesUsers = await User.find({ role: 'sales', status: 'active' }).select('_id name');
@@ -65,10 +94,15 @@ export const getSalesPerformanceReport = async (req, res) => {
         const performancePromises = salesUsers.map(async (user) => {
             const userId = user._id;
 
-            const leadsAssigned = await Lead.countDocuments({ assignedTo: userId, createdAt: dateFilter, isDeleted: false });
-            const dealsWon = await Deal.countDocuments({ owner: userId, stage: 'WON', closedAt: dateFilter });
+            // Leads Assigned: apply date filter to createdAt
+            const leadsAssigned = await Lead.countDocuments({ assignedTo: userId, ...leadsQuery });
+            
+            // Deals Won: apply date filter to closedAt
+            const dealsWon = await Deal.countDocuments({ owner: userId, stage: 'WON', ...closedAtQuery });
+            
+            // Won Value Aggregation: apply date filter to closedAt
             const wonValueAggregation = await Deal.aggregate([
-                { $match: { owner: userId, stage: 'WON', closedAt: dateFilter } },
+                { $match: { owner: userId, stage: 'WON', ...closedAtQuery } },
                 { $group: { _id: null, total: { $sum: '$value' } } }
             ]);
 
@@ -88,6 +122,7 @@ export const getSalesPerformanceReport = async (req, res) => {
         res.json(results);
 
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: 'Error generating sales performance report' });
     }
 };
@@ -97,11 +132,13 @@ export const getSalesPerformanceReport = async (req, res) => {
 // @access  Admin, Manager
 export const getConversionRateReport = async (req, res) => {
     const dateFilter = getFilterDates(req.query);
+    const leadsQuery = buildQuery({ isDeleted: false }, dateFilter);
+    const closedAtQuery = Object.keys(dateFilter).length > 0 ? { closedAt: dateFilter } : {};
 
     try {
-        const totalLeadsCreated = await Lead.countDocuments({ createdAt: dateFilter, isDeleted: false });
-        const dealsWon = await Deal.countDocuments({ stage: 'WON', closedAt: dateFilter });
-        const dealsLost = await Deal.countDocuments({ stage: 'LOST', closedAt: dateFilter });
+        const totalLeadsCreated = await Lead.countDocuments(leadsQuery);
+        const dealsWon = await Deal.countDocuments({ stage: 'WON', ...closedAtQuery });
+        const dealsLost = await Deal.countDocuments({ stage: 'LOST', ...closedAtQuery });
         
         const overallConversionRate = totalLeadsCreated > 0 ? ((dealsWon / totalLeadsCreated) * 100).toFixed(2) : 0;
 
@@ -112,6 +149,7 @@ export const getConversionRateReport = async (req, res) => {
             overallConversionRate: parseFloat(overallConversionRate)
         });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: 'Error generating conversion report' });
     }
 };
@@ -121,10 +159,11 @@ export const getConversionRateReport = async (req, res) => {
 // @access  Admin, Manager
 export const getLostReasonsReport = async (req, res) => {
     const dateFilter = getFilterDates(req.query);
+    const closedAtQuery = Object.keys(dateFilter).length > 0 ? { closedAt: dateFilter } : {};
 
     try {
         const reasons = await Deal.aggregate([
-            { $match: { stage: 'LOST', closedAt: dateFilter, closedReason: { $ne: null } } },
+            { $match: { stage: 'LOST', closedReason: { $ne: null }, ...closedAtQuery } },
             { $group: { _id: '$closedReason', count: { $sum: 1 } } },
             { $project: { _id: 0, reason: '$_id', count: 1 } },
             { $sort: { count: -1 } }
@@ -132,6 +171,7 @@ export const getLostReasonsReport = async (req, res) => {
 
         res.json(reasons);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: 'Error generating lost reasons report' });
     }
 };

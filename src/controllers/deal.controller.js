@@ -31,6 +31,7 @@ export const getDeals = async (req, res) => {
 
         res.json(deals);
     } catch (error) {
+           console.error(error);
         res.status(500).json({ message: 'Error fetching deals' });
     }
 };
@@ -67,6 +68,7 @@ export const createDeal = async (req, res) => {
         });
 
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };
@@ -91,6 +93,7 @@ export const getDealById = async (req, res) => {
 
         res.json(deal);
     } catch (error) {
+           console.error(error);
         res.status(500).json({ message: 'Error fetching deal' });
     }
 };
@@ -122,6 +125,7 @@ export const updateDeal = async (req, res) => {
             deal: updatedDeal
         });
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };
@@ -161,6 +165,7 @@ export const updateDealStage = async (req, res) => {
             deal: { _id: deal._id, stage: deal.stage }
         });
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };
@@ -211,6 +216,7 @@ export const closeDeal = async (req, res) => {
             deal: { _id: deal._id, stage: deal.stage, closedAt: deal.closedAt }
         });
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };

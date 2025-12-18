@@ -56,6 +56,7 @@ export const getLeads = async (req, res) => {
             total: totalLeads
         });
     } catch (error) {
+           console.error(error);
         res.status(500).json({ message: 'Error fetching leads' });
     }
 };
@@ -90,6 +91,7 @@ export const createLead = async (req, res) => {
             lead: { _id: lead._id, name: lead.name, status: lead.status }
         });
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };
@@ -113,6 +115,7 @@ export const getLeadById = async (req, res) => {
 
         res.json(lead);
     } catch (error) {
+           console.error(error);
         res.status(500).json({ message: 'Error fetching lead' });
     }
 };
@@ -144,6 +147,7 @@ export const updateLead = async (req, res) => {
             lead: updatedLead
         });
     } catch (error) {
+           console.error(error);
         res.status(400).json({ message: error.message });
     }
 };
@@ -165,6 +169,7 @@ export const deleteLead = async (req, res) => {
 
         res.json({ message: 'Lead deleted successfully' });
     } catch (error) {
+           console.error(error);
         res.status(500).json({ message: 'Error deleting lead' });
     }
 };
