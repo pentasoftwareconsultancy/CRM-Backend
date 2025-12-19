@@ -3,20 +3,27 @@
 import Notification from '../models/Notification.model.js';
 // Import FollowUp model if needed for triggering, but we'll focus on routes here.
 
-// Helper to create notifications (can be called by other controllers)
+// Helper function to create notifications (called by other controllers)
 export const createNotification = async (userId, type, message, relatedId = null) => {
-    // This function can be called by lead.controller (assignment), deal.controller (stage change), or activity.controller (overdue logic)
+    // Safety checks
+    if (!userId || !message) return;
+    
+    // Convert ObjectId if necessary, though Mongoose should handle it
+    const recipientId = userId._id || userId; 
+    
     try {
         await Notification.create({
-            user: userId,
+            user: recipientId,
             type,
             message,
             relatedId
         });
     } catch (e) {
-        console.error("Failed to create notification:", e.message);
+        // Log error but don't halt main operation
+        console.error(`Failed to create notification for user ${recipientId}:`, e.message);
     }
 };
+
 
 // @desc    Get notifications for logged-in user (9.1 GET /notifications)
 // @route   GET /api/notifications

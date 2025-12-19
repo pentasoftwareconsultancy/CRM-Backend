@@ -1,7 +1,10 @@
+// src/controllers/deal.controller.js
+
 import Deal from '../models/Deal.model.js';
 import Lead from '../models/Lead.model.js';
 import { createCustomerFromDeal } from './customer.controller.js';
 import mongoose from 'mongoose';
+import { createNotification } from './notification.controller.js'; // <-- NEW IMPORT for FR-38
 
 const DEAL_STAGES = ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL_SENT', 'NEGOTIATION', 'WON', 'LOST'];
 
@@ -26,7 +29,7 @@ export const getDeals = async (req, res) => {
     try {
         const deals = await Deal.find(filters)
             .sort({ expectedCloseDate: 1 })
-            .populate('lead', 'name company email phone status') // FR-15
+            .populate('lead', 'name company email phone status website') // Added website for frontend pipeline view
             .populate('owner', 'name email');
 
         res.json(deals);
@@ -61,6 +64,14 @@ export const createDeal = async (req, res) => {
             stage: stage || 'NEW',
             expectedCloseDate
         });
+
+        // FR-38: Notify the owner that a new deal was created
+        createNotification(
+            deal.owner, 
+            'deal_created', 
+            `New deal "${deal.title}" created for lead ${lead.company || lead.name}.`,
+            deal._id
+        );
 
         res.status(201).json({
             message: 'Deal created successfully',
@@ -141,16 +152,18 @@ export const updateDealStage = async (req, res) => {
     }
 
     try {
-        const deal = await Deal.findById(req.params.id);
+        const deal = await Deal.findById(req.params.id).populate('owner', 'name'); 
 
         if (!deal) {
             return res.status(404).json({ message: 'Deal not found' });
         }
 
         // Authorization check
-        if (req.user.role === 'sales' && deal.owner.toString() !== req.user._id.toString()) {
+        if (req.user.role === 'sales' && deal.owner._id.toString() !== req.user._id.toString()) {
             return res.status(403).json({ message: 'Not authorized to update this deal stage' });
         }
+        
+        const oldStage = deal.stage;
 
         // Prevent setting WON/LOST here; use the /close endpoint
         if (stage === 'WON' || stage === 'LOST') {
@@ -159,6 +172,16 @@ export const updateDealStage = async (req, res) => {
 
         deal.stage = stage;
         await deal.save();
+
+        // FR-38: Notify the owner of the stage change
+        if (oldStage !== stage) {
+            createNotification(
+                deal.owner._id, 
+                'stage_alert', 
+                `Deal "${deal.title}" moved from ${oldStage} to ${stage.replace(/_/g, ' ')}.`,
+                deal._id
+            );
+        }
 
         res.json({
             message: 'Deal stage updated',
@@ -181,14 +204,14 @@ export const closeDeal = async (req, res) => {
     }
 
     try {
-        const deal = await Deal.findById(req.params.id);
+        const deal = await Deal.findById(req.params.id).populate('owner', 'name'); 
 
         if (!deal) {
             return res.status(404).json({ message: 'Deal not found' });
         }
 
         // Authorization check
-        if (req.user.role === 'sales' && deal.owner.toString() !== req.user._id.toString()) {
+        if (req.user.role === 'sales' && deal.owner._id.toString() !== req.user._id.toString()) {
             return res.status(403).json({ message: 'Not authorized to close this deal' });
         }
 
@@ -197,6 +220,14 @@ export const closeDeal = async (req, res) => {
         deal.closedAt = new Date();
         deal.closedReason = reason;
         await deal.save();
+
+        // FR-38: Notify the owner that the deal has been finalized
+        createNotification(
+            deal.owner._id, 
+            'deal_closed', 
+            `Deal "${deal.title}" was closed as ${status}. Reason: ${reason}`,
+            deal._id
+        );
 
         // FR-26: When a deal is marked "Won", convert lead to customer
         if (status === 'WON') {
@@ -207,7 +238,6 @@ export const closeDeal = async (req, res) => {
                 await createCustomerFromDeal(deal._id);
             } catch (customerError) {
                 console.error("Error creating customer from won deal:", customerError.message);
-                // Optionally continue or return a warning, but we mark the deal closed.
             }
         }
 
