@@ -1,12 +1,12 @@
-// src/controllers/lead.controller.js (FINAL WITH NOTIFICATIONS AND EXPORT)
+// src/controllers/lead.controller.js (FINAL WITH FULL IMPORT/EXPORT LOGIC)
 
 import Lead from '../models/Lead.model.js';
 import mongoose from 'mongoose';
-import { createNotification } from './notification.controller.js'; // <-- CRITICAL IMPORT
+import { createNotification } from './notification.controller.js';
+import csv from 'csv-parser'; // Import CSV parser
+import { Readable } from 'stream'; // Node.js built-in for streams
 
 // @desc    Get all leads with filters and pagination (3.1 GET /leads)
-// @route   GET /api/leads
-// @access  Authenticated (Sales, Manager, Admin)
 export const getLeads = async (req, res) => {
     const { status, source, assignedTo, search, page = 1, limit = 20, from, to } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -19,7 +19,6 @@ export const getLeads = async (req, res) => {
         filters.assignedTo = assignedTo;
     }
 
-    // Handle pipe-separated status list using $in
     if (status) {
         const statusArray = status.split('|').filter(s => s);
         if (statusArray.length > 0) {
@@ -84,7 +83,7 @@ export const createLead = async (req, res) => {
     try {
         const lead = await Lead.create({
             name, email, phone,
-            assignedTo: req.user._id, // Default assigned to the creator
+            assignedTo: req.user._id, 
             ...rest
         });
 
@@ -140,7 +139,6 @@ export const updateLead = async (req, res) => {
             return res.status(403).json({ message: 'Not authorized to update this lead' });
         }
 
-        // Save old owner ID for comparison
         const oldAssignedTo = lead.assignedTo ? lead.assignedTo.toString() : null;
         
         const updatedLead = await Lead.findByIdAndUpdate(
@@ -189,8 +187,89 @@ export const deleteLead = async (req, res) => {
     }
 };
 
-// Placeholder for Import Leads (KEEPING 501 for now)
-export const importLeads = (req, res) => res.status(501).json({ message: 'Import API not implemented yet (Phase 2)' });
+// @desc    Import leads via CSV/Excel (FR-10) - IMPLEMENTED
+// @route   POST /api/leads/import
+// @access  Admin, Manager
+export const importLeads = async (req, res) => {
+    if (!req.file || req.file.fieldname !== 'file') {
+        return res.status(400).json({ message: 'No file uploaded. Expecting field name "file".' });
+    }
+    
+    const fileBuffer = req.file.buffer;
+    const currentUserId = req.user._id;
+    const leadsToInsert = [];
+    let successfulImports = 0;
+    let failedImports = 0;
+
+    const bufferStream = Readable.from(fileBuffer);
+    
+    try {
+        await new Promise((resolve, reject) => {
+            bufferStream
+                .pipe(csv())
+                .on('data', (row) => {
+                    const mappedLead = {
+                        name: row.name ? row.name.trim() : null,
+                        email: row.email ? row.email.trim().toLowerCase() : null,
+                        phone: row.phone ? row.phone.trim() : null,
+                        company: row.company ? row.company.trim() : null,
+                        source: row.source ? row.source.trim().toLowerCase() : 'import',
+                        status: row.status ? row.status.trim().toLowerCase() : 'new',
+                        budget: row.budget ? Number(row.budget) : 0,
+                        assignedTo: currentUserId,
+                    };
+                    
+                    if (mappedLead.name && (mappedLead.email || mappedLead.phone)) {
+                        leadsToInsert.push(mappedLead);
+                    } else {
+                        failedImports++;
+                    }
+                })
+                .on('end', resolve)
+                .on('error', reject);
+        });
+
+        if (leadsToInsert.length > 0) {
+            try {
+                 // Insert only unique documents (based on MongoDB indexes set up earlier)
+                const results = await Lead.insertMany(leadsToInsert, { ordered: false });
+                successfulImports = results.length;
+                
+                // Count documents skipped due to database-level duplicate email/phone constraints
+                failedImports += (leadsToInsert.length - successfulImports);
+
+            } catch (err) {
+                // Handle bulk write errors (often due to duplicates or bad data)
+                if (err.name === 'MongoBulkWriteError' || err.code === 11000) {
+                    successfulImports = err.result.nInserted || 0;
+                    failedImports += err.result.nUpserted || 0;
+                    failedImports += err.result.nInserted || 0; // Rough count of actual fails/skips
+                } else {
+                    throw err; // Re-throw if it's a critical error
+                }
+            }
+            
+            // Notify the user who uploaded the file
+            createNotification(
+                currentUserId, 
+                'import_complete', 
+                `Lead import complete: ${successfulImports} successful, ${failedImports} failed/skipped.`,
+                null
+            );
+        }
+
+        res.status(200).json({ 
+            message: 'Import process finished.',
+            successfulImports,
+            failedImports,
+            totalProcessed: leadsToInsert.length
+        });
+
+    } catch (error) {
+        console.error("Mass Import Error:", error);
+        res.status(500).json({ message: 'Error processing file data or database insertion failure.' });
+    }
+};
 
 
 // @desc    Export filtered leads as CSV/Excel (FR-10) - IMPLEMENTED
@@ -198,14 +277,11 @@ export const importLeads = (req, res) => res.status(501).json({ message: 'Import
 export const exportLeads = async (req, res) => {
     const { status, source, assignedTo, search } = req.query;
     
-    // --- 1. Build Filters (from getLeads) ---
+    // --- 1. Build Filters ---
     const filters = { isDeleted: false };
     
-    if (req.user.role === 'sales') {
-        filters.assignedTo = req.user._id;
-    } else if (assignedTo) {
-        filters.assignedTo = assignedTo;
-    }
+    if (req.user.role === 'sales') filters.assignedTo = req.user._id;
+    else if (assignedTo) filters.assignedTo = assignedTo;
 
     if (status) {
         const statusArray = status.split('|').filter(s => s);
@@ -218,17 +294,14 @@ export const exportLeads = async (req, res) => {
         const searchRegex = new RegExp(search, 'i');
         filters.$or = [{ name: searchRegex }, { company: searchRegex }, { email: searchRegex }, { phone: searchRegex }];
     }
-    // --- End Filter Building ---
 
     try {
-        // Fetch data
         const leads = await Lead.find(filters)
             .sort({ createdAt: 1 })
             .populate('assignedTo', 'name')
             .lean(); 
 
         if (leads.length === 0) {
-            // Returning 200 with no content or a friendly message is better for CSV export than 404
             res.setHeader('Content-Type', 'text/csv');
             return res.status(200).send("No leads found matching your export criteria.");
         }
@@ -244,7 +317,6 @@ export const exportLeads = async (req, res) => {
         const csvRows = leads.map(lead => {
             const assignedName = lead.assignedTo ? lead.assignedTo.name : 'Unassigned';
             
-            // Map values, wrapping strings with quotes and escaping internal quotes
             const escape = (val) => `"${(val || '').toString().replace(/"/g, '""')}"`;
             
             const row = [
@@ -254,7 +326,7 @@ export const exportLeads = async (req, res) => {
                 escape(lead.email),
                 escape(lead.phone),
                 escape(lead.source),
-                escape(lead.status),
+                lead.status,
                 lead.budget,
                 escape(lead.city),
                 escape(lead.description),
@@ -274,7 +346,6 @@ export const exportLeads = async (req, res) => {
 
     } catch (error) {
         console.error("Error during lead export:", error);
-        // This is the functional error return for the frontend to catch:
         res.status(500).json({ message: 'Internal server error during export processing.' });
     }
 };
