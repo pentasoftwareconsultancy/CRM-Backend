@@ -1,0 +1,61 @@
+// src/controllers/notification.controller.js
+
+import Notification from '../models/Notification.model.js';
+// Import FollowUp model if needed for triggering, but we'll focus on routes here.
+
+// Helper to create notifications (can be called by other controllers)
+export const createNotification = async (userId, type, message, relatedId = null) => {
+    // This function can be called by lead.controller (assignment), deal.controller (stage change), or activity.controller (overdue logic)
+    try {
+        await Notification.create({
+            user: userId,
+            type,
+            message,
+            relatedId
+        });
+    } catch (e) {
+        console.error("Failed to create notification:", e.message);
+    }
+};
+
+// @desc    Get notifications for logged-in user (9.1 GET /notifications)
+// @route   GET /api/notifications
+// @access  Authenticated (user gets their own notifications)
+export const getNotifications = async (req, res) => {
+    try {
+        const notifications = await Notification.find({ user: req.user._id })
+            .sort({ createdAt: -1 })
+            .limit(20); // Limit to 20 recent notifications
+
+        res.json(notifications);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error fetching notifications' });
+    }
+};
+
+// @desc    Mark notification as read (9.2 PATCH /notifications/:id/read)
+// @route   PATCH /api/notifications/:id/read
+// @access  Authenticated
+export const markNotificationRead = async (req, res) => {
+    try {
+        const notification = await Notification.findById(req.params.id);
+
+        if (!notification) {
+            return res.status(404).json({ message: 'Notification not found' });
+        }
+        
+        // Ensure user owns the notification
+        if (notification.user.toString() !== req.user._id.toString()) {
+             return res.status(403).json({ message: 'Not authorized to modify this notification.' });
+        }
+
+        notification.isRead = true;
+        await notification.save();
+
+        res.json({ message: 'Notification marked as read' });
+    } catch (error) {
+        console.error(error);
+        res.status(400).json({ message: 'Failed to update notification status' });
+    }
+};

@@ -7,7 +7,7 @@ import dealRoutes from './routes/deal.routes.js';
 import activityRoutes from './routes/activity.routes.js';
 import customerRoutes from './routes/customer.routes.js';
 import reportRoutes from './routes/report.routes.js';
-
+import notificationRoutes from './routes/notification.routes.js';
 
 const app = express();
 
@@ -20,8 +20,10 @@ app.use('/api/users', userRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/deals', dealRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/notifications', notificationRoutes)
 app.use('/api', activityRoutes);
 app.use('/api', reportRoutes);
+
 
 // Basic Health Check Route
 app.get('/api/health', (req, res) => {

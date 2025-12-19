@@ -9,6 +9,8 @@ import {
     exportLeads 
 } from '../controllers/lead.controller.js';
 import { protect, authorize } from '../middleware/auth.middleware.js';
+import upload from '../middleware/upload.middleware.js';
+
 
 const router = express.Router();
 
@@ -19,7 +21,16 @@ router.route('/')
     .post(protect, createLead); 
 
 // Phase 2 features (Import/Export)
-router.post('/import', protect, authorize('admin', 'manager'), importLeads);
+//router.post('/import', protect, authorize('admin', 'manager'), importLeads);
+
+
+router.post(
+  '/import',
+  protect,
+  authorize('admin', 'manager'),
+  upload.single('file'),
+  importLeads
+);
 router.get('/export', protect, authorize('admin', 'manager'), exportLeads);
 
 router.route('/:id')
