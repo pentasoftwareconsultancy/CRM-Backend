@@ -1,0 +1,12 @@
+Metric,Value
+Total Leads,3
+New Leads,3
+Won Deals,3
+Lost Deals,2
+
+Sales Rep,Assigned Leads,Won Deals
+Jane Sales,1,0
+John User,0,0
+
+Source,Conversion Rate (%)
+Overall,100
