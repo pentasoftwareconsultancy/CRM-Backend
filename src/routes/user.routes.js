@@ -13,7 +13,7 @@ const router = express.Router();
 // All user management routes require authentication and Admin role
 router.route('/')
     // 2.1 GET /users
-    .get(protect, authorize('admin'), getUsers) 
+    .get(protect, authorize('admin', 'manager'), getUsers) 
     // 2.2 POST /users
     .post(protect, authorize('admin'), createUser);
 
