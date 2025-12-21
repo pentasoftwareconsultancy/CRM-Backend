@@ -4,7 +4,8 @@ import {
     getSalesPerformanceReport,
     getConversionRateReport,
     getLostReasonsReport,
-    exportReport
+    exportReport,
+    getWeeklyPerformanceReport // <-- NEW IMPORT
 } from '../controllers/report.controller.js';
 import { protect, authorize } from '../middleware/auth.middleware.js';
 
@@ -16,6 +17,9 @@ router.route('/reports/overview')
 
 router.route('/reports/sales-performance')
     .get(reportAuth, getSalesPerformanceReport); // 8.2
+
+router.route('/reports/weekly-performance') // <-- NEW ROUTE FOR DASHBOARD CHART
+    .get(reportAuth, getWeeklyPerformanceReport);
 
 router.route('/reports/conversion-rate')
     .get(reportAuth, getConversionRateReport); // 8.3
