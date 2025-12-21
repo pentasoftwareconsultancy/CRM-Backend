@@ -11,29 +11,21 @@ export const getLeads = async (req, res) => {
     const { status, source, assignedTo, search, page = 1, limit = 20, from, to } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
+    // --- Filter Construction ---
     const filters = { isDeleted: false };
+    if (req.user.role === 'sales') filters.assignedTo = req.user._id;
+    else if (assignedTo) filters.assignedTo = mongoose.Types.ObjectId.isValid(assignedTo) ? mongoose.Types.ObjectId(assignedTo) : assignedTo;
     
-    if (req.user.role === 'sales') {
-        filters.assignedTo = req.user._id;
-    } else if (assignedTo) {
-        filters.assignedTo = assignedTo;
-    }
-
     if (status) {
         const statusArray = status.split('|').filter(s => s);
-        if (statusArray.length > 0) {
-            filters.status = { $in: statusArray };
-        }
+        if (statusArray.length > 0) filters.status = { $in: statusArray };
     }
-    
     if (source) filters.source = source;
-    
     if (from || to) {
         filters.createdAt = {};
         if (from) filters.createdAt.$gte = new Date(from);
         if (to) filters.createdAt.$lte = new Date(to);
     }
-    
     if (search) {
         const searchRegex = new RegExp(search, 'i');
         filters.$or = [
@@ -43,17 +35,75 @@ export const getLeads = async (req, res) => {
             { phone: searchRegex }
         ];
     }
+    // --- End Filter Construction ---
 
     try {
-        const totalLeads = await Lead.countDocuments(filters);
-        const leads = await Lead.find(filters)
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(parseInt(limit))
-            .populate('assignedTo', 'name email designation');
+        // --- Aggregation Pipeline for Note Count and Pagination ---
+        const aggregationPipeline = [
+            // 1. Filter Leads (Authorization, Status, Search, etc.)
+            { $match: filters },
+
+            // 2. Perform Lookup to Count Notes (FR-11)
+            {
+                $lookup: {
+                    from: 'notes', // Name of the Note collection in MongoDB (usually lowercase plural)
+                    localField: '_id',
+                    foreignField: 'lead',
+                    as: 'notes'
+                }
+            },
+            
+            // 3. Populate AssignedTo Details
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'assignedTo',
+                    foreignField: '_id',
+                    as: 'assignedToDetails'
+                }
+            },
+            {
+                $addFields: {
+                    notesCount: { $size: "$notes" },
+                    assignedTo: { $arrayElemAt: ["$assignedToDetails", 0] }
+                }
+            },
+
+            // 4. Sort and Pagination Stage
+            { $sort: { createdAt: -1 } },
+            { 
+                $facet: {
+                    metadata: [{ $count: "total" }],
+                    data: [{ $skip: skip }, { $limit: parseInt(limit) }]
+                }
+            }
+        ];
+
+        const results = await Lead.aggregate(aggregationPipeline);
+        
+        const totalLeads = results[0]?.metadata?.[0]?.total || 0;
+        const leadsData = results[0]?.data || [];
+
+        // Clean up: Remove temporary fields used for counting/populating
+        const cleanedData = leadsData.map(lead => {
+            // ensure assignedTo is consistent with earlier endpoints (lean object)
+            if (lead.assignedTo && lead.assignedTo._id) {
+                lead.assignedTo = {
+                    _id: lead.assignedTo._id,
+                    name: lead.assignedTo.name,
+                    email: lead.assignedTo.email,
+                    designation: lead.assignedTo.designation
+                };
+            } else {
+                lead.assignedTo = null;
+            }
+            delete lead.notes;
+            delete lead.assignedToDetails;
+            return lead;
+        });
 
         res.json({
-            data: leads,
+            data: cleanedData,
             page: parseInt(page),
             limit: parseInt(limit),
             total: totalLeads
