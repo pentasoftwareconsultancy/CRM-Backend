@@ -51,6 +51,23 @@ export const getUsers = async (req, res) => {
     }
 };
 
+export const getAssignees = async (req, res) => {
+    try {
+        // Fetch only active users with roles capable of owning leads/deals
+        const users = await User.find({ 
+            status: 'active',
+            role: { $in: ['admin', 'manager', 'sales'] } 
+        }).select('_id name role'); // Only return minimal, safe data
+
+        res.json(users);
+
+    } catch (error) {
+        console.error("Error fetching assignees:", error);
+        res.status(500).json({ message: 'Error fetching user list for assignment' });
+    }
+};
+
+
 // @desc    Create a new user (2.2 POST /users)
 // @route   POST /api/users
 // @access  Admin

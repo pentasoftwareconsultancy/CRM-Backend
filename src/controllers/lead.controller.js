@@ -14,7 +14,7 @@ export const getLeads = async (req, res) => {
     // --- Filter Construction ---
     const filters = { isDeleted: false };
     if (req.user.role === 'sales') filters.assignedTo = req.user._id;
-    else if (assignedTo) filters.assignedTo = mongoose.Types.ObjectId.isValid(assignedTo) ? mongoose.Types.ObjectId(assignedTo) : assignedTo;
+    else if (assignedTo) filters.assignedTo = mongoose.Types.ObjectId.isValid(assignedTo) ? new mongoose.Types.ObjectId(assignedTo) : assignedTo;
     
     if (status) {
         const statusArray = status.split('|').filter(s => s);
