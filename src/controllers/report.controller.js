@@ -186,9 +186,10 @@ export const getSalesPerformanceReport = async (req, res) => {
 
 
     try {
-        const salesUsers = await User.find({ role: 'sales', status: 'active' }).select('_id name');
+        // FIX: Fetch all active users (Admin, Manager, Sales)
+        const allActiveUsers = await User.find({ status: 'active' }).select('_id name'); 
         
-        const performancePromises = salesUsers.map(async (user) => {
+        const performancePromises = allActiveUsers.map(async (user) => {
             const userId = user._id;
 
             const leadsAssigned = await Lead.countDocuments({ assignedTo: userId, ...leadsQuery });
