@@ -1,8 +1,8 @@
 import User from '../models/User.model.js';
 
-// Helper function for filtering
+// Helper function for filtering (remains the same)
 const buildUserQuery = (query) => {
-    const filters = { status: 'active' }; // Default only active users
+    const filters = { status: 'active' }; 
     if (query.role) {
         filters.role = { $in: query.role.split('|') };
     }
@@ -10,29 +10,43 @@ const buildUserQuery = (query) => {
         filters.status = { $in: query.status.split('|') };
     }
     
-    // Basic search by name or email
     if (query.search) {
         const search = new RegExp(query.search, 'i');
         filters.$or = [{ name: search }, { email: search }];
-        // If status was active, we need to ensure the status is still respected
-        delete filters.status; // Remove status filter for $or query to simplify
-        filters.$and = [{ $or: [{ name: search }, { email: search }] }, { status: 'active' }];
     }
     
     return filters;
 };
 
 // @desc    Get list of users (2.1 GET /users)
-// @route   GET /api/users
-// @access  Admin
+// @access  Authenticated (All roles)
 export const getUsers = async (req, res) => {
+    const { search, status, role, page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
     try {
-        const filters = buildUserQuery(req.query);
+        const filters = buildUserQuery({ search, status, role });
         
-        const users = await User.find(filters).select('-password');
-        res.json(users);
+        const selectFields = req.user.role === 'admin' 
+            ? '-password' 
+            : '_id name email role designation status'; 
+
+        const totalUsers = await User.countDocuments(filters);
+        const users = await User.find(filters)
+            .select(selectFields)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
+        
+        res.json({
+            data: users,
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: totalUsers
+        });
+
     } catch (error) {
-           console.error(error);
+        console.error(error);
         res.status(500).json({ message: 'Error fetching users' });
     }
 };

@@ -9,18 +9,18 @@ import mongoose from 'mongoose';
 // @route   GET /api/followups
 // @access  Authenticated
 export const getFollowUps = async (req, res) => {
-    const { status, from, to, assignedTo } = req.query;
+    const { status, from, to, assignedTo, page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
     const filters = { lead: { $exists: true } }; // Ensure it's a lead/deal follow-up
 
-    // Handle Status Filtering (FIXED LOGIC HERE)
+    // Handle Status Filtering (using $in)
     if (status) {
-        // Split the statuses by the pipe (|) and use $in for multiple values
-        const statusArray = status.split('|').filter(s => s); // Filter out empty strings
+        const statusArray = status.split('|').filter(s => s);
         if (statusArray.length > 0) {
             filters.status = { $in: statusArray };
         }
     } else {
-        // Default behavior if no status provided
         filters.status = 'pending';
     }
     
@@ -38,13 +38,20 @@ export const getFollowUps = async (req, res) => {
         if (to) filters.scheduledAt.$lte = new Date(to);
     }
     
+    let totalFollowUps = 0; 
+    let followups = [];
+
     try {
-        const followups = await FollowUp.find(filters)
+        totalFollowUps = await FollowUp.countDocuments(filters);
+        
+        followups = await FollowUp.find(filters)
             .sort({ scheduledAt: 1 })
+            .skip(skip)
+            .limit(parseInt(limit))
             .populate('lead', 'name company')
             .populate('assignedTo', 'name');
 
-        // FR-19: Show overdue logic (If status is pending and scheduledAt is past)
+        // Apply overdue classification logic
         const result = followups.map(fu => {
             let isOverdue = fu.status === 'pending' && new Date(fu.scheduledAt) < new Date();
             return {
@@ -53,10 +60,14 @@ export const getFollowUps = async (req, res) => {
             };
         });
 
-        // FR-21: (The dashboard visibility is a front-end concern, but this provides the data)
-        res.json(result);
+        res.json({
+            data: result,
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: totalFollowUps
+        });
     } catch (error) {
-           console.error(error);
+        console.error(error);
         res.status(500).json({ message: 'Error fetching follow-ups' });
     }
 };

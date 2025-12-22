@@ -36,11 +36,12 @@ export const createCustomerFromDeal = async (dealId) => {
 
 
 // @desc    Get list of customers (7.1 GET /customers)
-// @route   GET /api/customers
 // @access  Authenticated
 export const getCustomers = async (req, res) => {
-    const { search, owner } = req.query;
-    const filters = {};
+    const { search, owner, page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const filters = {}; 
 
     if (req.user.role === 'sales') {
         filters.owner = req.user._id;
@@ -58,13 +59,23 @@ export const getCustomers = async (req, res) => {
     }
     
     try {
+        const totalCustomers = await Customer.countDocuments(filters); 
         const customers = await Customer.find(filters)
             .sort({ convertedDate: -1 })
+            .skip(skip)
+            .limit(parseInt(limit))
             .populate('owner', 'name');
 
-        res.json(customers);
+        const customerData = customers.map(c => ({ ...c.toObject(), id: c._id }));
+
+        res.json({
+            data: customerData,
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: totalCustomers
+        });
     } catch (error) {
-           console.error(error);
+        console.error(error);
         res.status(500).json({ message: 'Error fetching customers' });
     }
 };
