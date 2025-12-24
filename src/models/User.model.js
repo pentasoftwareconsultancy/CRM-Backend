@@ -19,6 +19,11 @@ const userSchema = new mongoose.Schema({
         required: true,
         select: false // Do not return password by default
     },
+     // --- ADD THIS FIELD ---
+    avatar: {
+        type: String,
+        default: '' 
+    },
     role: { // FR-4
         type: String,
         enum: ['admin', 'manager', 'sales'],

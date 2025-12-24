@@ -5,13 +5,15 @@ import {
     getUserById, 
     updateUser, 
     deactivateUser, 
-    getAssignees
+    getAssignees,
+    updateUserProfile
 } from '../controllers/user.controller.js';
 import { protect, authorize } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
 router.get('/assignees', protect, getAssignees);
+router.put('/profile', protect, updateUserProfile);
 
 // All user management routes require authentication and Admin role
 router.route('/')
@@ -19,6 +21,7 @@ router.route('/')
     .get(protect, authorize('admin', 'manager'), getUsers) 
     // 2.2 POST /users
     .post(protect, authorize('admin'), createUser);
+
 
 router.route('/:id')
     // 2.3 GET /users/:id
