@@ -1,4 +1,5 @@
 import express from 'express';
+import upload from '../middleware/upload.js'; // Import multer config
 import { 
     getUsers, 
     createUser, 
@@ -13,7 +14,7 @@ import { protect, authorize } from '../middleware/auth.middleware.js';
 const router = express.Router();
 
 router.get('/assignees', protect, getAssignees);
-router.put('/profile', protect, updateUserProfile);
+router.put('/profile', protect, upload.single('avatar'), updateUserProfile);
 
 // All user management routes require authentication and Admin role
 router.route('/')

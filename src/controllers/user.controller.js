@@ -1,5 +1,5 @@
 import User from '../models/User.model.js';
-
+import cloudinary from '../config/cloudinary.js';
 // Helper function for filtering (remains the same)
 const buildUserQuery = (query) => {
     const filters = { status: 'active' }; 
@@ -70,13 +70,20 @@ export const getAssignees = async (req, res) => {
 export const updateUserProfile = async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
-        console.log(user);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        console.log("Image received length:", req.body.avatar?.length); // Debug line
-
+        // Update Name
         if (req.body.name) user.name = req.body.name;
-        if (req.body.avatar) user.avatar = req.body.avatar; 
+
+        // Handle Avatar Upload to Cloudinary
+        if (req.file) {
+            const result = await cloudinary.uploader.upload(req.file.path, {
+                folder: "nexus_crm/avatars",
+                public_id: `user_${user._id}`, // Overwrites old image to save space
+                transformation: [{ width: 300, height: 300, crop: "fill" }] // Auto-resize
+            });
+            user.avatar = result.secure_url; // Save the Cloudinary URL to MongoDB
+        }
 
         const savedUser = await user.save();
 
@@ -84,11 +91,12 @@ export const updateUserProfile = async (req, res) => {
             _id: savedUser._id,
             name: savedUser.name,
             email: savedUser.email,
-            avatar: savedUser.avatar, // Ensure this is sent back!
+            avatar: savedUser.avatar, 
             role: savedUser.role
         });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error("Upload Error:", error);
+        res.status(500).json({ message: "Failed to upload image" });
     }
 };
 // @desc    Create a new user (2.2 POST /users)
