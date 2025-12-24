@@ -38,8 +38,8 @@ export const login = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                avatar: user.avatar,
                 designation: user.designation,
-                // Do NOT send the password field
             }
         });
     } else {

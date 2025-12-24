@@ -12,7 +12,9 @@ import notificationRoutes from './routes/notification.routes.js';
 const app = express();
 
 // Middleware
-app.use(express.json());
+// Increase limit to 5MB to accommodate image strings
+app.use(express.json({ limit: '5mb' })); 
+app.use(express.urlencoded({ limit: '5mb', extended: true }));
 app.use(cors())
 // Routes
 app.use('/api/auth', authRoutes);

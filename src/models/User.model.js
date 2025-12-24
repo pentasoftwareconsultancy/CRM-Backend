@@ -14,16 +14,17 @@ const userSchema = new mongoose.Schema({
         trim: true,
         lowercase: true
     },
+      // --- ADD THIS FIELD ---
+    avatar: {
+        type: String,
+        default: '' 
+    },
     password: {
         type: String,
         required: true,
         select: false // Do not return password by default
     },
-     // --- ADD THIS FIELD ---
-    avatar: {
-        type: String,
-        default: '' 
-    },
+   
     role: { // FR-4
         type: String,
         enum: ['admin', 'manager', 'sales'],

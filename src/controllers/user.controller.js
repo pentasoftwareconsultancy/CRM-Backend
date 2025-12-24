@@ -67,19 +67,28 @@ export const getAssignees = async (req, res) => {
     }
 };
 
-// Example Backend Controller logic
 export const updateUserProfile = async (req, res) => {
-    const { name, avatar } = req.body;
-    const user = await User.findById(req.user._id);
+    try {
+        const user = await User.findById(req.user._id);
+        console.log(user);
+        if (!user) return res.status(404).json({ message: 'User not found' });
 
-    if (user) {
-        user.name = name || user.name;
-        user.avatar = avatar || user.avatar; // This saves the Base64 or URL string
-        
-        const updatedUser = await user.save();
-        res.json(updatedUser);
-    } else {
-        res.status(404).json({ message: "User not found" });
+        console.log("Image received length:", req.body.avatar?.length); // Debug line
+
+        if (req.body.name) user.name = req.body.name;
+        if (req.body.avatar) user.avatar = req.body.avatar; 
+
+        const savedUser = await user.save();
+
+        res.json({
+            _id: savedUser._id,
+            name: savedUser.name,
+            email: savedUser.email,
+            avatar: savedUser.avatar, // Ensure this is sent back!
+            role: savedUser.role
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
 };
 // @desc    Create a new user (2.2 POST /users)
