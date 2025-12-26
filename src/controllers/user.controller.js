@@ -1,5 +1,8 @@
 import User from '../models/User.model.js';
 import cloudinary from '../config/cloudinary.js';
+// 1. IMPORT THE NOTIFICATION HELPER
+import { createNotification } from './notification.controller.js';
+
 // Helper function for filtering (remains the same)
 const buildUserQuery = (query) => {
     const filters = { status: 'active' }; 
@@ -99,6 +102,7 @@ export const updateUserProfile = async (req, res) => {
         res.status(500).json({ message: "Failed to upload image" });
     }
 };
+
 // @desc    Create a new user (2.2 POST /users)
 // @route   POST /api/users
 // @access  Admin
@@ -114,6 +118,14 @@ export const createUser = async (req, res) => {
         const user = await User.create({
             name, email, password, role, designation, phone
         });
+
+        // 2. CREATE NOTIFICATION (Target: The Admin who performed the action)
+        createNotification(
+            req.user._id, 
+            'user_created', 
+            `Successfully created new user: ${user.name} (${user.role}).`,
+            user._id // Related ID is the new user's ID
+        );
 
         // Response should exclude the password field (handled by default select: false)
         res.status(201).json({
