@@ -181,8 +181,12 @@ export const updateDealStage = async (req, res) => {
 export const closeDeal = async (req, res) => {
     const { status, reason } = req.body; 
 
-    if (!['WON', 'LOST'].includes(status) || !reason) {
-        return res.status(400).json({ message: 'Status must be WON or LOST, and a reason is required.' });
+    // Validation Check
+    if (!['WON', 'LOST'].includes(status)) {
+        return res.status(400).json({ message: 'Status must be WON or LOST.' });
+    }
+    if (!reason || reason.trim().length < 3) {
+        return res.status(400).json({ message: 'A descriptive reason (min 3 characters) is required to close a deal.' });
     }
 
     try {

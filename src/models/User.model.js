@@ -4,41 +4,43 @@ import bcrypt from 'bcryptjs';
 const userSchema = new mongoose.Schema({
     name: {
         type: String,
-        required: true,
+        required: [true, 'Name is required'],
         trim: true
     },
     email: {
         type: String,
-        required: true,
+        required: [true, 'Email is required'],
         unique: true,
         trim: true,
-        lowercase: true
+        lowercase: true,
+        match: [/.+@.+\..+/, 'Please fill a valid email address'] // Added basic email format check
     },
-      // --- ADD THIS FIELD ---
     avatar: {
         type: String,
         default: '' 
     },
     password: {
         type: String,
-        required: true,
-        select: false // Do not return password by default
+        required: [true, 'Password is required'],
+        select: false,
+        minlength: [6, 'Password must be at least 6 characters long'] // Enforce minimum length
     },
    
-    role: { // FR-4
+    role: { 
         type: String,
         enum: ['admin', 'manager', 'sales'],
         default: 'sales'
     },
     designation: {
         type: String,
-        trim: true
+        trim: true,
+        required: [true, 'Designation is required'] // Added requirement
     },
     phone: {
         type: String,
         trim: true
     },
-    status: { // Used for soft-deletion/deactivation (2.5 DELETE /users/:id)
+    status: { 
         type: String,
         enum: ['active', 'inactive'],
         default: 'active'

@@ -1,3 +1,4 @@
+// src/controllers/auth.controller.js (Validation Update)
 import User from '../models/User.model.js';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
@@ -15,9 +16,12 @@ const generateToken = (id, role) => {
 export const login = async (req, res) => {
     const { email, password } = req.body;
 
-    // 400 Validation check is typically done in middleware (or here for simplicity)
+    // Validation check
     if (!email || !password) {
-        return res.status(400).json({ message: 'Please enter all fields' });
+        return res.status(400).json({ message: 'Please enter both email and password.' });
+    }
+    if (password.length < 6) {
+        return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
     }
 
     // 1. Find user by email, explicitly selecting the password
@@ -52,6 +56,17 @@ export const login = async (req, res) => {
 // @route   POST /api/auth/change-password
 export const changePassword = async (req, res) => {
     const { currentPassword, newPassword } = req.body;
+    
+    // Validation check
+    if (!currentPassword || !newPassword) {
+         return res.status(400).json({ message: 'Current and new password fields are required.' });
+    }
+    if (newPassword.length < 6) {
+        return res.status(400).json({ message: 'New password must be at least 6 characters long.' });
+    }
+    if (currentPassword === newPassword) {
+        return res.status(400).json({ message: 'New password cannot be the same as the current password.' });
+    }
     
     // 1. Find user, explicitly selecting password
     const user = await User.findById(req.user._id).select('+password');

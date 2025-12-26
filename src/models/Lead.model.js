@@ -3,37 +3,41 @@ import mongoose from 'mongoose';
 const LeadSchema = new mongoose.Schema({
     name: {
         type: String,
-        required: true,
+        required: [true, 'Name is required'],
         trim: true
     },
     company: {
         type: String,
+        required: [true, 'Company is required'], // Added requirement
         trim: true
     },
     email: {
         type: String,
+        required: [true, 'Email is required'], // Added requirement
         trim: true,
         lowercase: true,
-        // unique: true // We handle uniqueness check in controller for better error handling (FR-12)
+        match: [/.+@.+\..+/, 'Please fill a valid email address'] 
+        // unique is handled by indexing and controller logic (FR-12)
     },
     phone: {
         type: String,
+        required: [true, 'Phone number is required'], // Added requirement
         trim: true,
-        // unique: true // Handled in controller (FR-12)
     },
     source: {
         type: String,
         enum: ['website', 'referral', 'call', 'other'],
         default: 'other'
     },
-    status: { // Corresponds to the first stage of the pipeline progression (New, Contacted, Qualified, Converted, Lost)
+    status: { 
         type: String,
         enum: ['new', 'contacted', 'qualified', 'converted', 'lost'],
         default: 'new'
     },
     budget: {
         type: Number,
-        default: 0
+        default: 0,
+        min: [0, 'Budget cannot be negative'] // Enforce minimum 0
     },
     description: {
         type: String
@@ -41,11 +45,11 @@ const LeadSchema = new mongoose.Schema({
     city: {
         type: String
     },
-    assignedTo: { // FR-9
+    assignedTo: { 
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     },
-    isDeleted: { // Used for Soft-Delete (3.5 DELETE /leads/:id)
+    isDeleted: { 
         type: Boolean,
         default: false
     }

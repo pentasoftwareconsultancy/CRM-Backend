@@ -85,6 +85,14 @@ export const createFollowUp = async (req, res) => {
     const { type, scheduledAt, note, assignedTo } = req.body;
     const leadId = req.params.leadId;
 
+    // Validation Check
+    if (!type || !scheduledAt) {
+         return res.status(400).json({ message: 'Type and scheduled date/time are required.' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(leadId)) {
+        return res.status(400).json({ message: 'Invalid lead ID format.' });
+    }
+
     try {
         const followUp = await FollowUp.create({
             lead: leadId,
