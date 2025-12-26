@@ -1,3 +1,5 @@
+// src/models/FollowUp.model.js
+
 import mongoose from 'mongoose';
 
 const FollowUpSchema = new mongoose.Schema({
@@ -22,7 +24,8 @@ const FollowUpSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'completed', 'overdue'], // Overdue status logic handled in controller/query
+        // CRITICAL FIX: Remove 'overdue' from the DB enum. It is a derived status now.
+        enum: ['pending', 'completed'], 
         default: 'pending'
     },
     note: {

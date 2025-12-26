@@ -2,9 +2,7 @@ import FollowUp from '../models/FollowUp.model.js';
 import Note from '../models/Note.model.js';
 import Lead from '../models/Lead.model.js';
 import mongoose from 'mongoose';
-
-// --- FOLLOW-UP CONTROLLERS ---
-
+import { createNotification } from './notification.controller.js'; // Ensure this is imported if used later
 // @desc    Get pending/overdue follow-ups (5.3 GET /followups)
 // @route   GET /api/followups
 // @access  Authenticated
@@ -12,26 +10,26 @@ export const getFollowUps = async (req, res) => {
     const { status, from, to, assignedTo, page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
-    const filters = { lead: { $exists: true } }; // Ensure it's a lead/deal follow-up
+    const filters = { lead: { $exists: true } }; 
 
-    // Handle Status Filtering (using $in)
-    if (status) {
-        const statusArray = status.split('|').filter(s => s);
-        if (statusArray.length > 0) {
-            filters.status = { $in: statusArray };
-        }
+    // CRITICAL FIX: If the frontend requests 'pending' OR 'overdue', we query the DB for the base status 'pending'.
+    if (status === 'pending' || status === 'overdue') {
+        filters.status = 'pending';
+    } else if (status === 'completed') {
+        filters.status = 'completed';
     } else {
+        // Default fetching only pending tasks (which includes overdue dynamically)
         filters.status = 'pending';
     }
     
-    // Role-based filtering
+    // Role-based filtering (remains the same)
     if (req.user.role === 'sales') {
         filters.assignedTo = req.user._id;
     } else if (assignedTo) {
         filters.assignedTo = assignedTo;
     }
 
-    // Apply date range filters
+    // Apply date range filters (remains the same)
     if (from || to) {
         filters.scheduledAt = {};
         if (from) filters.scheduledAt.$gte = new Date(from);
@@ -42,6 +40,7 @@ export const getFollowUps = async (req, res) => {
     let followups = [];
 
     try {
+        // Fetch data based on the simplified filters
         totalFollowUps = await FollowUp.countDocuments(filters);
         
         followups = await FollowUp.find(filters)
@@ -51,13 +50,19 @@ export const getFollowUps = async (req, res) => {
             .populate('lead', 'name company')
             .populate('assignedTo', 'name');
 
-        // Apply overdue classification logic
+        // Apply dynamic status classification for the HTTP response
         const result = followups.map(fu => {
-            let isOverdue = fu.status === 'pending' && new Date(fu.scheduledAt) < new Date();
-            return {
-                ...fu.toObject(),
-                isOverdue: isOverdue
-            };
+            const fuObject = fu.toObject();
+            
+            // Overdue classification: pending AND schedule time passed
+            let isOverdue = fuObject.status === 'pending' && new Date(fuObject.scheduledAt) < new Date();
+            
+            // Override status in response if overdue
+            if (isOverdue) {
+                fuObject.status = 'overdue';
+            }
+            
+            return fuObject;
         });
 
         res.json({
