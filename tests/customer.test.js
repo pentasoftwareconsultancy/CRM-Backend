@@ -68,8 +68,9 @@ describe('7. CUSTOMERS APIs', () => {
                 .set('Authorization', `Bearer ${salesToken}`);
             
             expect(res.statusCode).to.equal(200);
-            expect(res.body).to.be.an('array').with.lengthOf(1);
-            expect(res.body[0].email).to.equal(customerData.email);
+            const body = res.body.data || res.body;
+            expect(body).to.be.an('array').with.lengthOf(1);
+            expect(body[0].email).to.equal(customerData.email);
         });
     });
 

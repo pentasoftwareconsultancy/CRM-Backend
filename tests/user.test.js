@@ -33,8 +33,9 @@ describe('2. User & Role Management APIs (Admin Only)', () => {
             
             // CORRECTED: Use res.statusCode
             expect(res.statusCode).to.equal(200);
-            expect(res.body).to.be.an('array').with.lengthOf(3);
-            expect(res.body[0]).to.have.property('role');
+            const body = res.body.data || res.body;
+            expect(body).to.be.an('array').with.lengthOf(3);
+            expect(body[0]).to.have.property('role');
         });
 
         it('should allow filtering users by role (manager)', async () => {
@@ -44,8 +45,9 @@ describe('2. User & Role Management APIs (Admin Only)', () => {
             
             // CORRECTED: Use res.statusCode
             expect(res.statusCode).to.equal(200);
-            expect(res.body).to.be.an('array').with.lengthOf(1);
-            expect(res.body[0].role).to.equal('manager');
+            const body = res.body.data || res.body;
+            expect(body).to.be.an('array').with.lengthOf(1);
+            expect(body[0].role).to.equal('manager');
         });
 
         it('should deny non-admin users access (FR-5)', async () => {
@@ -67,6 +69,7 @@ describe('2. User & Role Management APIs (Admin Only)', () => {
                 email: 'newtester@test.com',
                 password: 'password123',
                 role: 'sales',
+                designation: 'Sales Executive',
                 phone: '1234567890'
             };
 

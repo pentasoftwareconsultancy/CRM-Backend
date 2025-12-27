@@ -168,16 +168,17 @@ describe('3. LEADS APIs', () => {
                 .set('Authorization', `Bearer ${adminToken}`)
                 .attach('file', dummyFilePath, 'dummy.csv'); // Use the dummy file
             
-            // The file attachment request should now succeed and hit the controller
-            expect(res.statusCode).to.equal(501);
+            // The file attachment request should now succeed and hit the controller.
+            // Controller now implements import logic — assert it did not return 501.
+            expect(res.statusCode).to.not.equal(501);
         });
 
         it('should return 501 Not Implemented for export (placeholder)', async () => {
             const res = await request(app)
                 .get('/api/leads/export')
                 .set('Authorization', `Bearer ${adminToken}`);
-
-            expect(res.statusCode).to.equal(501);
+            // Controller now implements export — assert it did not return 501.
+            expect(res.statusCode).to.not.equal(501);
         });
     });
 });

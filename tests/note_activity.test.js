@@ -26,7 +26,7 @@ describe('6. NOTES & ACTIVITIES APIs', () => {
         await Note.deleteMany({});
 
         const lead = await Lead.create({
-            name: 'Activity Lead', email: 'activity@test.com', phone: '3333333333',
+            name: 'Activity Lead', email: 'activity@test.com', phone: '3333333333', company: 'Activity Co',
             status: 'new', assignedTo: salesUserId, source: 'website'
         });
         leadId = lead._id.toString();

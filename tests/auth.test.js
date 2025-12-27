@@ -13,8 +13,10 @@ describe('1. Authentication APIs', () => {
         name: 'Test Admin',
         email: 'admin@test.com',
         password: 'password123',
-        role: 'admin'
+        role: 'admin',
+        designation: 'Administrator'
     };
+
     
     // Connect to DB and ensure data consistency
     before(async () => {
@@ -49,6 +51,36 @@ describe('1. Authentication APIs', () => {
             expect(res.body).to.have.property('token');
             expect(res.body.user).to.have.property('email', adminUser.email);
             expect(res.body.user).to.not.have.property('password');
+        });
+
+        it('should return 400 when email or password is missing', async () => {
+            const res = await request(app)
+                .post('/api/auth/login')
+                .send({ email: adminUser.email }); // missing password
+
+            expect(res.statusCode).to.equal(400);
+            expect(res.body).to.have.property('message');
+        });
+
+        it('should return 400 when password is too short', async () => {
+            const res = await request(app)
+                .post('/api/auth/login')
+                .send({ email: adminUser.email, password: '123' });
+
+            expect(res.statusCode).to.equal(400);
+            expect(res.body).to.have.property('message');
+        });
+
+        it('should block login for inactive users (403)', async () => {
+            // Create an inactive user
+            const inactiveUser = new User({ ...adminUser, email: 'inactive@test.com', status: 'inactive' });
+            await inactiveUser.save();
+
+            const res = await request(app)
+                .post('/api/auth/login')
+                .send({ email: 'inactive@test.com', password: adminUser.password });
+
+            expect(res.statusCode).to.equal(403);
         });
 
         it('should return 401 for invalid credentials (password)', async () => {

@@ -30,8 +30,8 @@ describe('8. REPORTS APIs (Admin/Manager Only)', () => {
 
         // --- Setup Test Data ---
         // 1. Leads Created in Range (FR-28)
-        await Lead.create({ name: 'Lead 1', email: 'l1@test.com', status: 'new', assignedTo: salesUserId, createdAt: TEST_DATE });
-        await Lead.create({ name: 'Lead 2', email: 'l2@test.com', status: 'new', assignedTo: salesUserId, createdAt: TEST_DATE });
+        await Lead.create({ name: 'Lead 1', email: 'l1@test.com', phone: '7000000001', company: 'ReportCo', status: 'new', assignedTo: salesUserId, createdAt: TEST_DATE });
+        await Lead.create({ name: 'Lead 2', email: 'l2@test.com', phone: '7000000002', company: 'ReportCo', status: 'new', assignedTo: salesUserId, createdAt: TEST_DATE });
 
         // 2. Deals Closed in Range (WON/LOST)
         // Deal 1: WON

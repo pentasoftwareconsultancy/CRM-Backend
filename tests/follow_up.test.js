@@ -36,7 +36,7 @@ describe('5. FOLLOW-UP APIs', () => {
         await FollowUp.deleteMany({});
 
         const lead = await Lead.create({
-            name: 'FollowUp Lead', email: 'followup@test.com', phone: '2222222222',
+            name: 'FollowUp Lead', email: 'followup@test.com', phone: '2222222222', company: 'FollowUp Co',
             status: 'new', assignedTo: salesUserId, source: 'website'
         });
         leadId = lead._id.toString();
@@ -79,9 +79,10 @@ describe('5. FOLLOW-UP APIs', () => {
             const res = await request(app)
                 .get(`/api/followups?status=pending`)
                 .set('Authorization', `Bearer ${salesToken}`);
-            
             expect(res.statusCode).to.equal(200);
-            expect(res.body).to.be.an('array').with.lengthOf(1);
+            // controller may return paginated object { data, page, ... }
+            const body = res.body.data || res.body;
+            expect(body).to.be.an('array').with.lengthOf(1);
         });
     });
 

@@ -29,7 +29,7 @@ describe('4. DEALS / PIPELINE APIs', () => {
 
         // Setup a qualified lead
         const lead = await Lead.create({
-            name: 'Pipeline Client', email: 'pipeline@test.com', phone: '1111111111',
+            name: 'Pipeline Client', email: 'pipeline@test.com', phone: '1111111111', company: 'Pipeline Co',
             status: 'qualified', assignedTo: salesUserId, source: 'referral'
         });
         leadId = lead._id.toString();
