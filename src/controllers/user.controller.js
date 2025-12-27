@@ -2,6 +2,7 @@ import User from '../models/User.model.js';
 import cloudinary from '../config/cloudinary.js';
 // 1. IMPORT THE NOTIFICATION HELPER
 import { createNotification } from './notification.controller.js';
+import logger from '../utils/logger.js';
 
 // Helper function for filtering (remains the same)
 const buildUserQuery = (query) => {
@@ -27,6 +28,8 @@ export const getUsers = async (req, res) => {
     const { search, status, role, page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    logger.info('User.getUsers request', { userId: req.user._id, filters: { search, status, role, page, limit } });
+
     try {
         const filters = buildUserQuery({ search, status, role });
         
@@ -41,6 +44,7 @@ export const getUsers = async (req, res) => {
             .skip(skip)
             .limit(parseInt(limit));
         
+        logger.info('User.getUsers success', { userId: req.user._id, total: totalUsers });
         res.json({
             data: users,
             page: parseInt(page),
@@ -49,29 +53,32 @@ export const getUsers = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
+        logger.error('Error fetching users', { error });
         res.status(500).json({ message: 'Error fetching users' });
     }
 };
 
 export const getAssignees = async (req, res) => {
     try {
+        logger.info('User.getAssignees request', { userId: req.user._id });
         // Fetch only active users with roles capable of owning leads/deals
         const users = await User.find({ 
             status: 'active',
             role: { $in: ['admin', 'manager', 'sales'] } 
         }).select('_id name role'); // Only return minimal, safe data
 
+        logger.info('User.getAssignees success', { userId: req.user._id, count: users.length });
         res.json(users);
 
     } catch (error) {
-        console.error("Error fetching assignees:", error);
+        logger.error('Error fetching assignees', { error });
         res.status(500).json({ message: 'Error fetching user list for assignment' });
     }
 };
 
 export const updateUserProfile = async (req, res) => {
     try {
+        logger.info('User.updateUserProfile attempt', { userId: req.user._id });
         const user = await User.findById(req.user._id);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -90,6 +97,7 @@ export const updateUserProfile = async (req, res) => {
 
         const savedUser = await user.save();
 
+        logger.info('User.updateUserProfile success', { userId: savedUser._id });
         res.json({
             _id: savedUser._id,
             name: savedUser.name,
@@ -98,7 +106,7 @@ export const updateUserProfile = async (req, res) => {
             role: savedUser.role
         });
     } catch (error) {
-        console.error("Upload Error:", error);
+        logger.error('Upload Error', { error });
         res.status(500).json({ message: "Failed to upload image" });
     }
 };
@@ -113,6 +121,7 @@ export const createUser = async (req, res) => {
     if (userExists) {
         return res.status(400).json({ message: 'User with this email already exists' });
     }
+    logger.info('User.createUser attempt', { adminId: req.user._id, email, role });
 
     try {
         const user = await User.create({
@@ -127,13 +136,15 @@ export const createUser = async (req, res) => {
             user._id // Related ID is the new user's ID
         );
 
+        logger.info('User.createUser success', { adminId: req.user._id, createdUserId: user._id });
+
         // Response should exclude the password field (handled by default select: false)
         res.status(201).json({
             message: 'User created successfully',
             user: user
         });
     } catch (error) {
-           console.error(error);
+        logger.error('Error creating user', { error });
         res.status(400).json({ message: error.message });
     }
 };
@@ -159,6 +170,7 @@ export const updateUser = async (req, res) => {
     const updates = req.body;
 
     try {
+        logger.info('User.updateUser attempt', { adminId: req.user._id, targetUserId: userId, updates });
         // Find user but prevent direct modification of sensitive fields like email
         const user = await User.findById(userId);
 
@@ -174,13 +186,14 @@ export const updateUser = async (req, res) => {
         });
 
         const updatedUser = await user.save();
+        logger.info('User.updateUser success', { adminId: req.user._id, updatedUserId: updatedUser._id });
         res.json({ 
             message: 'User updated successfully',
             user: updatedUser 
         });
 
     } catch (error) {
-           console.error(error);
+        logger.error('Error updating user', { error });
         res.status(400).json({ message: error.message });
     }
 };
@@ -191,6 +204,8 @@ export const updateUser = async (req, res) => {
 export const deactivateUser = async (req, res) => {
     const userId = req.params.id;
 
+    logger.info('User.deactivateUser attempt', { adminId: req.user._id, targetUserId: userId });
+
     const user = await User.findByIdAndUpdate(
         userId, 
         { status: 'inactive' }, 
@@ -198,6 +213,7 @@ export const deactivateUser = async (req, res) => {
     );
 
     if (user) {
+        logger.info('User.deactivateUser success', { adminId: req.user._id, targetUserId: userId });
         res.json({ message: 'User deactivated successfully' });
     } else {
         res.status(404).json({ message: 'User not found' });

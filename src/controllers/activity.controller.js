@@ -3,6 +3,7 @@ import Note from '../models/Note.model.js';
 import Lead from '../models/Lead.model.js';
 import mongoose from 'mongoose';
 import { createNotification } from './notification.controller.js'; // Ensure this is imported if used later
+import logger from '../utils/logger.js';
 // @desc    Get pending/overdue follow-ups (5.3 GET /followups)
 // @route   GET /api/followups
 // @access  Authenticated
@@ -72,7 +73,7 @@ export const getFollowUps = async (req, res) => {
             total: totalFollowUps
         });
     } catch (error) {
-        console.error(error);
+        logger.error('Error fetching follow-ups', { error });
         res.status(500).json({ message: 'Error fetching follow-ups' });
     }
 };
@@ -107,7 +108,7 @@ export const createFollowUp = async (req, res) => {
             followup: { _id: followUp._id, status: followUp.status }
         });
     } catch (error) {
-           console.error(error);
+        logger.error('Error creating follow-up', { error });
         res.status(400).json({ message: error.message });
     }
 };
@@ -154,7 +155,7 @@ export const completeFollowUp = async (req, res) => {
         });
 
     } catch (error) {
-           console.error(error);
+        logger.error('Error completing follow-up', { error });
         res.status(400).json({ message: error.message });
     }
 };
@@ -191,7 +192,7 @@ export const addNote = async (req, res) => {
             note: note
         });
     } catch (error) {
-           console.error(error);
+        logger.error('Error adding note', { error });
         res.status(400).json({ message: error.message });
     }
 };
@@ -227,7 +228,7 @@ export const deleteNote = async (req, res) => {
         await note.deleteOne();
         res.json({ message: 'Note deleted successfully' });
     } catch (error) {
-           console.error(error);
+        logger.error('Error deleting note', { error });
         res.status(500).json({ message: 'Error deleting note' });
     }
 };
@@ -284,7 +285,7 @@ export const getLeadActivities = async (req, res) => {
         res.json(allActivities);
 
     } catch (error) {
-           console.error(error);
+        logger.error('Error fetching activities', { error });
         res.status(500).json({ message: 'Error fetching activities' });
     }
 };

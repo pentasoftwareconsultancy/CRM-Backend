@@ -3,6 +3,7 @@
 import Lead from '../models/Lead.model.js';
 import mongoose from 'mongoose';
 import { createNotification } from './notification.controller.js';
+import logger from '../utils/logger.js';
 import csv from 'csv-parser'; // Import CSV parser
 import { Readable } from 'stream'; // Node.js built-in for streams
 
@@ -36,6 +37,7 @@ export const getLeads = async (req, res) => {
         ];
     }
     // --- End Filter Construction ---
+    logger.info('Lead.getLeads request', { userId: req.user._id, filters: { status, source, assignedTo, search, from, to, page, limit } });
 
     try {
         // --- Aggregation Pipeline for Note Count and Pagination ---
@@ -102,6 +104,7 @@ export const getLeads = async (req, res) => {
             return lead;
         });
 
+        logger.info('Lead.getLeads success', { userId: req.user._id, total: totalLeads });
         res.json({
             data: cleanedData,
             page: parseInt(page),
@@ -109,7 +112,7 @@ export const getLeads = async (req, res) => {
             total: totalLeads
         });
     } catch (error) {
-        console.error(error);
+        logger.error('Error fetching leads', { error });
         res.status(500).json({ message: 'Error fetching leads' });
     }
 };
@@ -117,6 +120,7 @@ export const getLeads = async (req, res) => {
 // @desc    Create a new lead (3.2 POST /leads)
 export const createLead = async (req, res) => {
     const { name, email, phone, ...rest } = req.body;
+    logger.info('Lead.createLead attempt', { userId: req.user._id, name, email, phone });
     
     // FR-12: Lead duplicate detection
     if (email || phone) {
@@ -126,6 +130,7 @@ export const createLead = async (req, res) => {
         });
         
         if (existingLead) {
+            logger.warn('Lead.createLead conflict - duplicate', { userId: req.user._id, existingLeadId: existingLead._id });
             return res.status(409).json({ message: 'Lead with this email or phone already exists' });
         }
     }
@@ -145,12 +150,14 @@ export const createLead = async (req, res) => {
             lead._id
         );
 
+        logger.info('Lead.createLead success', { userId: req.user._id, leadId: lead._id });
+
         res.status(201).json({
             message: 'Lead created successfully',
             lead: { _id: lead._id, name: lead.name, status: lead.status }
         });
     } catch (error) {
-        console.error(error);
+        logger.error('Error creating lead', { error });
         res.status(400).json({ message: error.message });
     }
 };
@@ -158,6 +165,7 @@ export const createLead = async (req, res) => {
 // @desc    Get full details of a lead (3.3 GET /leads/:id)
 export const getLeadById = async (req, res) => {
     try {
+        logger.info('Lead.getLeadById request', { userId: req.user._id, leadId: req.params.id });
         const lead = await Lead.findOne({ _id: req.params.id, isDeleted: false })
             .populate('assignedTo', 'name email designation');
 
@@ -166,12 +174,13 @@ export const getLeadById = async (req, res) => {
         }
         
         if (req.user.role !== 'admin' && req.user.role !== 'manager' && lead.assignedTo._id.toString() !== req.user._id.toString()) {
+            logger.warn('Lead.getLeadById - unauthorized access attempt', { userId: req.user._id, leadId: req.params.id });
             return res.status(403).json({ message: 'Not authorized to view this lead' });
         }
 
         res.json(lead);
     } catch (error) {
-        console.error(error);
+        logger.error('Error fetching lead', { error });
         res.status(500).json({ message: 'Error fetching lead' });
     }
 };
@@ -179,6 +188,7 @@ export const getLeadById = async (req, res) => {
 // @desc    Update a lead's info (3.4 PUT /leads/:id)
 export const updateLead = async (req, res) => {
     try {
+        logger.info('Lead.updateLead attempt', { userId: req.user._id, leadId: req.params.id, body: req.body });
         const lead = await Lead.findById(req.params.id);
 
         if (!lead || lead.isDeleted) {
@@ -199,6 +209,7 @@ export const updateLead = async (req, res) => {
         
         // FR-37: Check if assignment changed
         if (req.body.assignedTo && updatedLead.assignedTo.toString() !== oldAssignedTo) {
+            logger.info('Lead.updateLead - assignment changed', { leadId: updatedLead._id, oldAssignedTo, newAssignedTo: updatedLead.assignedTo });
             createNotification(
                 updatedLead.assignedTo, 
                 'lead_assigned', 
@@ -212,7 +223,7 @@ export const updateLead = async (req, res) => {
             lead: updatedLead
         });
     } catch (error) {
-        console.error(error);
+        logger.error('Error updating lead', { error });
         res.status(400).json({ message: error.message });
     }
 };
@@ -220,6 +231,7 @@ export const updateLead = async (req, res) => {
 // @desc    Soft-delete a lead (3.5 DELETE /leads/:id)
 export const deleteLead = async (req, res) => {
     try {
+        logger.info('Lead.deleteLead attempt', { userId: req.user._id, leadId: req.params.id });
         const lead = await Lead.findByIdAndUpdate(
             req.params.id,
             { isDeleted: true },
@@ -230,9 +242,10 @@ export const deleteLead = async (req, res) => {
             return res.status(404).json({ message: 'Lead not found' });
         }
 
+        logger.info('Lead.deleteLead success', { userId: req.user._id, leadId: req.params.id });
         res.json({ message: 'Lead deleted successfully' });
     } catch (error) {
-        console.error(error);
+        logger.error('Error deleting lead', { error });
         res.status(500).json({ message: 'Error deleting lead' });
     }
 };
@@ -247,6 +260,7 @@ export const importLeads = async (req, res) => {
     
     const fileBuffer = req.file.buffer;
     const currentUserId = req.user._id;
+    logger.info('Lead.importLeads started', { userId: currentUserId, sizeBytes: fileBuffer.length });
     const leadsToInsert = [];
     let successfulImports = 0;
     let failedImports = 0;
@@ -306,6 +320,7 @@ export const importLeads = async (req, res) => {
                 `Lead import complete: ${successfulImports} successful, ${failedImports} failed/skipped.`,
                 null
             );
+            logger.info('Lead.importLeads completed', { userId: currentUserId, successfulImports, failedImports, totalProcessed: leadsToInsert.length });
         }
 
         res.status(200).json({ 
@@ -316,7 +331,7 @@ export const importLeads = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Mass Import Error:", error);
+        logger.error('Mass Import Error', { error });
         res.status(500).json({ message: 'Error processing file data or database insertion failure.' });
     }
 };
@@ -346,6 +361,7 @@ export const exportLeads = async (req, res) => {
     }
 
     try {
+        logger.info('Lead.exportLeads request', { userId: req.user._id, filters: { status, source, assignedTo, search } });
         const leads = await Lead.find(filters)
             .sort({ createdAt: 1 })
             .populate('assignedTo', 'name')
@@ -353,6 +369,7 @@ export const exportLeads = async (req, res) => {
 
         if (leads.length === 0) {
             res.setHeader('Content-Type', 'text/csv');
+            logger.info('Lead.exportLeads no results', { userId: req.user._id });
             return res.status(200).send("No leads found matching your export criteria.");
         }
 
@@ -392,10 +409,11 @@ export const exportLeads = async (req, res) => {
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', `attachment; filename=leads_export_${new Date().toISOString().slice(0, 10)}.csv`);
         
+        logger.info('Lead.exportLeads success', { userId: req.user._id, count: leads.length });
         res.status(200).send(csvContent);
 
     } catch (error) {
-        console.error("Error during lead export:", error);
+        logger.error('Error during lead export', { error });
         res.status(500).json({ message: 'Internal server error during export processing.' });
     }
 };

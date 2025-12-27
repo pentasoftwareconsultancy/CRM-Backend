@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.model.js';
 import dotenv from 'dotenv';
+import logger from '../utils/logger.js';
 
 dotenv.config();
 
@@ -27,8 +28,7 @@ export const protect = async (req, res, next) => {
 
             next();
         } catch (error) {
-           console.error(error);
-            console.error(error);
+            logger.error('Auth.protect token verification failed', { error });
             return res.status(401).json({ message: 'Not authorized, token failed' });
         }
     }

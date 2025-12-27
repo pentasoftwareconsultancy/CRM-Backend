@@ -8,6 +8,7 @@ import activityRoutes from './routes/activity.routes.js';
 import customerRoutes from './routes/customer.routes.js';
 import reportRoutes from './routes/report.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import { requestLogger } from './middleware/logger.middleware.js';
 
 const app = express();
 
@@ -16,6 +17,8 @@ const app = express();
 app.use(express.json({ limit: '5mb' })); 
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
 app.use(cors())
+// Request logger
+app.use(requestLogger);
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -34,7 +37,15 @@ app.get('/api/health', (req, res) => {
 
 // Global Error Handler (Placeholder for now)
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  // Use structured logger for errors
+  import('./utils/logger.js').then(mod => {
+    const logger = mod.default;
+    logger.error('Unhandled error in request pipeline', { stack: err.stack, url: req.originalUrl });
+  }).catch(() => {
+    // Fallback
+    // If logger cannot be imported, write to stderr as fallback
+    process.stderr.write(err.stack + "\n");
+  });
   res.status(500).json({ message: 'Internal Server Error' });
 });
 

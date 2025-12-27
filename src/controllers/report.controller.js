@@ -4,6 +4,7 @@ import Lead from '../models/Lead.model.js';
 import Deal from '../models/Deal.model.js';
 import User from '../models/User.model.js';
 import mongoose from 'mongoose';
+import logger from '../utils/logger.js';
 
 const getDateDaysAgo = (days) => {
     const d = new Date();
@@ -12,10 +13,29 @@ const getDateDaysAgo = (days) => {
     return d;
 };
 
-const getFilterDates = () => {
+const getFilterDates = (query = {}) => {
+    // If caller provides explicit from/to, use that as Current Period (CP)
+    if (query.from && query.to) {
+        const from = new Date(query.from);
+        const to = new Date(query.to);
+
+        // Normalize to start/end of day to be inclusive
+        from.setHours(0, 0, 0, 0);
+        to.setHours(23, 59, 59, 999);
+
+        const periodLen = to.getTime() - from.getTime();
+
+        const ppEnd = new Date(from.getTime() - 1);
+        const ppStart = new Date(ppEnd.getTime() - periodLen);
+
+        return {
+            CP: { $gte: from, $lte: to },
+            PP: { $gte: ppStart, $lte: ppEnd }
+        };
+    }
+
     const now = new Date();
-    
-    // Current Period (CP): Last 30 days
+    // Default: Current Period (CP) = last 30 days
     const cpStart = getDateDaysAgo(30);
     const cpEnd = now; // Now
 
@@ -63,7 +83,7 @@ const getPeriodStats = async (periodFilter) => {
 // @route   GET /api/reports/overview
 // @access  Admin, Manager
 export const getOverviewReport = async (req, res) => {
-    const { CP, PP } = getFilterDates();
+    const { CP, PP } = getFilterDates(req.query);
 
     try {
         const [
@@ -108,7 +128,7 @@ export const getOverviewReport = async (req, res) => {
             prevWinRate: previousStats.winRate
         });
     } catch (error) {
-        console.error(error);
+        logger.error('Error generating overview report', { error });
         res.status(500).json({ message: 'Error generating overview report' });
     }
 };
@@ -171,7 +191,7 @@ export const getWeeklyPerformanceReport = async (req, res) => {
         res.json(output);
 
     } catch (error) {
-        console.error("Error generating weekly performance report:", error);
+        logger.error('Error generating weekly performance report', { error });
         res.status(500).json({ message: 'Error generating weekly performance report' });
     }
 };
@@ -180,10 +200,11 @@ export const getWeeklyPerformanceReport = async (req, res) => {
 // @desc    Get sales performance report (8.2 GET /reports/sales-performance)
 // ... (Logic remains the same, relying on getFilterDates helper) ...
 export const getSalesPerformanceReport = async (req, res) => {
-    const dateFilter = getFilterDates(req.query); // Note: still uses query params, unlike dashboard
-    const leadsQuery = req.query.from || req.query.to ? { createdAt: dateFilter, isDeleted: false } : { isDeleted: false };
-    const closedAtQuery = req.query.from || req.query.to ? { closedAt: dateFilter } : {};
-
+    // Respect explicit from/to query params when provided
+    const { CP } = getFilterDates(req.query);
+    const useDateFilter = Boolean(req.query.from || req.query.to);
+    const leadsQuery = useDateFilter ? { createdAt: CP, isDeleted: false } : { isDeleted: false };
+    const closedAtQuery = useDateFilter ? { closedAt: CP } : {};
 
     try {
         // FIX: Fetch all active users (Admin, Manager, Sales)
@@ -216,7 +237,7 @@ export const getSalesPerformanceReport = async (req, res) => {
         res.json(results);
 
     } catch (error) {
-        console.error(error);
+        logger.error('Error generating sales performance report', { error });
         res.status(500).json({ message: 'Error generating sales performance report' });
     }
 };
@@ -232,9 +253,10 @@ const buildQuery = (baseFilters, dateFilter) => {
 };
 
 export const getConversionRateReport = async (req, res) => {
-    const dateFilter = req.query.from || req.query.to ? getFilterDates(req.query) : {};
-    const leadsQuery = buildQuery({ isDeleted: false }, dateFilter);
-    const closedAtQuery = Object.keys(dateFilter).length > 0 ? { closedAt: dateFilter } : {};
+    const useDateFilter = Boolean(req.query.from || req.query.to);
+    const { CP } = getFilterDates(req.query);
+    const leadsQuery = useDateFilter ? { isDeleted: false, createdAt: CP } : { isDeleted: false };
+    const closedAtQuery = useDateFilter ? { closedAt: CP } : {};
 
     try {
         const totalLeadsCreated = await Lead.countDocuments(leadsQuery);
@@ -250,14 +272,15 @@ export const getConversionRateReport = async (req, res) => {
             overallConversionRate: parseFloat(overallConversionRate)
         });
     } catch (error) {
-        console.error(error);
+        logger.error('Error generating conversion report', { error });
         res.status(500).json({ message: 'Error generating conversion report' });
     }
 };
 
 export const getLostReasonsReport = async (req, res) => {
-    const dateFilter = req.query.from || req.query.to ? getFilterDates(req.query) : {};
-    const closedAtQuery = Object.keys(dateFilter).length > 0 ? { closedAt: dateFilter } : {};
+    const useDateFilter = Boolean(req.query.from || req.query.to);
+    const { CP } = getFilterDates(req.query);
+    const closedAtQuery = useDateFilter ? { closedAt: CP } : {};
 
     try {
         const reasons = await Deal.aggregate([
@@ -269,7 +292,7 @@ export const getLostReasonsReport = async (req, res) => {
 
         res.json(reasons);
     } catch (error) {
-        console.error(error);
+        logger.error('Error generating lost reasons report', { error });
         res.status(500).json({ message: 'Error generating lost reasons report' });
     }
 };

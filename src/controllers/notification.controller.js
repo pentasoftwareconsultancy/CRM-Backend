@@ -1,6 +1,7 @@
 // src/controllers/notification.controller.js
 
 import Notification from '../models/Notification.model.js';
+import logger from '../utils/logger.js';
 // Import FollowUp model if needed for triggering, but we'll focus on routes here.
 
 // Helper function to create notifications (called by other controllers)
@@ -20,7 +21,7 @@ export const createNotification = async (userId, type, message, relatedId = null
         });
     } catch (e) {
         // Log error but don't halt main operation
-        console.error(`Failed to create notification for user ${recipientId}:`, e.message);
+        logger.error(`Failed to create notification for user ${recipientId}`, { message: e.message });
     }
 };
 
@@ -36,7 +37,7 @@ export const getNotifications = async (req, res) => {
 
         res.json(notifications);
     } catch (error) {
-        console.error(error);
+        logger.error('Error fetching notifications', { error });
         res.status(500).json({ message: 'Error fetching notifications' });
     }
 };
@@ -62,7 +63,7 @@ export const markNotificationRead = async (req, res) => {
 
         res.json({ message: 'Notification marked as read' });
     } catch (error) {
-        console.error(error);
+        logger.error('Failed to update notification status', { error });
         res.status(400).json({ message: 'Failed to update notification status' });
     }
 };

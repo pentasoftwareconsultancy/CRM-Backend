@@ -16,6 +16,7 @@
     "author": "",
     "license": "ISC",
     "dependencies": {
+        "winston": "^3.9.0",
         "bcryptjs": "^3.0.3",
         "cloudinary": "^2.8.0",
         "cors": "^2.8.5",

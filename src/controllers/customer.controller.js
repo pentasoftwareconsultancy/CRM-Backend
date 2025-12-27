@@ -1,6 +1,7 @@
 import Customer from '../models/Customer.model.js';
 import Lead from '../models/Lead.model.js';
 import Deal from '../models/Deal.model.js';
+import logger from '../utils/logger.js';
 
 /**
  * Creates a Customer entry based on a 'WON' Deal and its Lead.
@@ -10,7 +11,7 @@ import Deal from '../models/Deal.model.js';
  */
 export const createCustomerFromDeal = async (dealId) => {
     const deal = await Deal.findById(dealId).populate('lead');
-    console.log(deal);
+    logger.info('createCustomerFromDeal - fetched deal', { dealId, deal });
 
     if (!deal || deal.stage !== 'WON' || !deal.lead) {
         throw new Error('Deal is not won or missing lead data.');
@@ -75,7 +76,7 @@ export const getCustomers = async (req, res) => {
             total: totalCustomers
         });
     } catch (error) {
-        console.error(error);
+        logger.error('Error fetching customers', { error });
         res.status(500).json({ message: 'Error fetching customers' });
     }
 };
@@ -102,7 +103,7 @@ export const getCustomerById = async (req, res) => {
         
         res.json(customer);
     } catch (error) {
-           console.error(error);
+        logger.error('Error fetching customer', { error });
         res.status(500).json({ message: 'Error fetching customer' });
     }
 };
@@ -134,7 +135,7 @@ export const updateCustomer = async (req, res) => {
             customer: updatedCustomer
         });
     } catch (error) {
-           console.error(error);
+        logger.error('Error updating customer', { error });
         res.status(400).json({ message: error.message });
     }
 };
@@ -150,7 +151,7 @@ export const manualCreateCustomer = async (req, res) => {
         });
         res.status(201).json({ message: 'Customer created manually', customer });
     } catch (error) {
-           console.error(error);
+        logger.error('Error creating customer manually', { error });
         res.status(400).json({ message: error.message });
     }
 };

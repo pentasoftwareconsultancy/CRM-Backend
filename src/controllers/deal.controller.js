@@ -5,6 +5,7 @@ import Lead from '../models/Lead.model.js';
 import { createCustomerFromDeal } from './customer.controller.js';
 import mongoose from 'mongoose';
 import { createNotification } from './notification.controller.js'; // <-- CRITICAL IMPORT
+import logger from '../utils/logger.js';
 
 const DEAL_STAGES = ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL_SENT', 'NEGOTIATION', 'WON', 'LOST'];
 
@@ -23,14 +24,16 @@ export const getDeals = async (req, res) => {
     if (leadId) filters.lead = leadId;
 
     try {
+        logger.info('Deal.getDeals request', { userId: req.user._id, filters: { stage, owner, leadId } });
         const deals = await Deal.find(filters)
             .sort({ expectedCloseDate: 1 })
             .populate('lead', 'name company email phone status website') // Added website
             .populate('owner', 'name email');
 
+        logger.info('Deal.getDeals success', { userId: req.user._id, count: deals.length });
         res.json(deals);
     } catch (error) {
-           console.error(error);
+        logger.error('Error fetching deals', { error });
         res.status(500).json({ message: 'Error fetching deals' });
     }
 };
@@ -42,6 +45,7 @@ export const createDeal = async (req, res) => {
     const dealOwner = (req.user.role === 'admin' || req.user.role === 'manager') && owner ? owner : req.user._id;
 
     try {
+        logger.info('Deal.createDeal attempt', { userId: req.user._id, leadId, title, value });
         const lead = await Lead.findById(leadId);
         if (!lead || lead.isDeleted) {
             return res.status(404).json({ message: 'Lead not found' });
@@ -65,13 +69,15 @@ export const createDeal = async (req, res) => {
             deal._id
         );
 
+        logger.info('Deal.createDeal success', { userId: req.user._id, dealId: deal._id });
+
         res.status(201).json({
             message: 'Deal created successfully',
             deal: { _id: deal._id, stage: deal.stage }
         });
 
     } catch (error) {
-           console.error(error);
+        logger.error('Error creating deal', { error });
         res.status(400).json({ message: error.message });
     }
 };
@@ -80,6 +86,7 @@ export const createDeal = async (req, res) => {
 // ... (getDealById remains the same) ...
 export const getDealById = async (req, res) => {
     try {
+        logger.info('Deal.getDealById request', { userId: req.user._id, dealId: req.params.id });
         const deal = await Deal.findById(req.params.id)
             .populate('lead', 'name company status')
             .populate('owner', 'name');
@@ -92,9 +99,10 @@ export const getDealById = async (req, res) => {
             return res.status(403).json({ message: 'Not authorized to view this deal' });
         }
 
+        logger.info('Deal.getDealById success', { userId: req.user._id, dealId: deal._id });
         res.json(deal);
     } catch (error) {
-           console.error(error);
+        logger.error('Error fetching deal', { error });
         res.status(500).json({ message: 'Error fetching deal' });
     }
 };
@@ -103,6 +111,7 @@ export const getDealById = async (req, res) => {
 // ... (updateDeal remains the same) ...
 export const updateDeal = async (req, res) => {
     try {
+        logger.info('Deal.updateDeal attempt', { userId: req.user._id, dealId: req.params.id, body: req.body });
         const deal = await Deal.findById(req.params.id);
 
         if (!deal) {
@@ -119,12 +128,13 @@ export const updateDeal = async (req, res) => {
             { new: true, runValidators: true }
         );
 
+        logger.info('Deal.updateDeal success', { userId: req.user._id, dealId: updatedDeal._id });
         res.json({
             message: 'Deal updated successfully',
             deal: updatedDeal
         });
     } catch (error) {
-           console.error(error);
+        logger.error('Error updating deal', { error });
         res.status(400).json({ message: error.message });
     }
 };
@@ -138,6 +148,7 @@ export const updateDealStage = async (req, res) => {
     }
 
     try {
+        logger.info('Deal.updateDealStage attempt', { userId: req.user._id, dealId: req.params.id, stage });
         const deal = await Deal.findById(req.params.id).populate('owner', 'name'); 
 
         if (!deal) {
@@ -167,12 +178,13 @@ export const updateDealStage = async (req, res) => {
             );
         }
 
+        logger.info('Deal.updateDealStage success', { userId: req.user._id, dealId: deal._id, stage: deal.stage });
         res.json({
             message: 'Deal stage updated',
             deal: { _id: deal._id, stage: deal.stage }
         });
     } catch (error) {
-           console.error(error);
+        logger.error('Error updating deal stage', { error });
         res.status(400).json({ message: error.message });
     }
 };
@@ -190,6 +202,7 @@ export const closeDeal = async (req, res) => {
     }
 
     try {
+        logger.info('Deal.closeDeal attempt', { userId: req.user._id, dealId: req.params.id, status });
         const deal = await Deal.findById(req.params.id).populate('owner', 'name'); 
 
         if (!deal) {
@@ -219,17 +232,19 @@ export const closeDeal = async (req, res) => {
             await Lead.findByIdAndUpdate(deal.lead, { status: 'converted' });
             try {
                 await createCustomerFromDeal(deal._id);
+                logger.info('Deal.closeDeal - customer created from won deal', { dealId: deal._id });
             } catch (customerError) {
-                console.error("Error creating customer from won deal:", customerError.message);
+                logger.error('Error creating customer from won deal', { message: customerError.message, dealId: deal._id });
             }
         }
 
+        logger.info('Deal.closeDeal success', { userId: req.user._id, dealId: deal._id, status: deal.stage });
         res.json({
             message: 'Deal closed successfully',
             deal: { _id: deal._id, stage: deal.stage, closedAt: deal.closedAt }
         });
     } catch (error) {
-           console.error(error);
+        logger.error('Error closing deal', { error });
         res.status(400).json({ message: error.message });
     }
 };
