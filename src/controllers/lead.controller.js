@@ -201,9 +201,16 @@ export const updateLead = async (req, res) => {
 
         const oldAssignedTo = lead.assignedTo ? lead.assignedTo.toString() : null;
         
+        // Prevent direct status edits via this general update endpoint.
+        const updates = { ...req.body };
+        if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
+            logger.warn('Lead.updateLead - attempt to modify status ignored', { userId: req.user._id, leadId: req.params.id });
+            delete updates.status;
+        }
+
         const updatedLead = await Lead.findByIdAndUpdate(
             req.params.id,
-            req.body,
+            updates,
             { new: true, runValidators: true }
         );
         
