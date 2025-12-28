@@ -42,7 +42,7 @@ const getFilterDates = (query = {}) => {
     // Previous Period (PP): 30 days before CP
     const ppStart = getDateDaysAgo(60);
     const ppEnd = getDateDaysAgo(30);
-    
+
     return {
         CP: { $gte: cpStart, $lte: cpEnd },
         PP: { $gte: ppStart, $lte: ppEnd }
@@ -53,26 +53,28 @@ const getFilterDates = (query = {}) => {
  * Helper to fetch key metrics for a given date range.
  */
 const getPeriodStats = async (periodFilter) => {
-    
+
     // For leads, we check creation date
     const leadsCreated = await Lead.countDocuments({ createdAt: periodFilter, isDeleted: false });
-    
+
     // For deals, we check closedAt date
     const dealsWon = await Deal.countDocuments({ stage: 'WON', closedAt: periodFilter });
     const dealsLost = await Deal.countDocuments({ stage: 'LOST', closedAt: periodFilter });
+    const dealsCancelled = await Deal.countDocuments({ stage: 'CANCELLED', closedAt: periodFilter });
 
     const wonValueAggregation = await Deal.aggregate([
         { $match: { stage: 'WON', closedAt: periodFilter } },
         { $group: { _id: null, total: { $sum: '$value' } } }
     ]);
-    
-    const totalClosed = dealsWon + dealsLost;
+
+    const totalClosed = dealsWon + dealsLost + dealsCancelled;
     const winRate = totalClosed > 0 ? ((dealsWon / totalClosed) * 100).toFixed(1) : 0;
-    
+
     return {
         leadsCreated,
         wonDeals: dealsWon,
         lostDeals: dealsLost,
+        cancelledDeals: dealsCancelled,
         wonValue: wonValueAggregation[0] ? wonValueAggregation[0].total : 0,
         winRate: parseFloat(winRate)
     };
@@ -94,16 +96,16 @@ export const getOverviewReport = async (req, res) => {
         ] = await Promise.all([
             // 1. Total Leads (Cumulative)
             Lead.countDocuments({ isDeleted: false }),
-            
+
             // 2. Current Open Pipeline Value (Cumulative, no time filter needed on this aggregate)
             Deal.aggregate([
-                { $match: { stage: { $nin: ['WON', 'LOST'] } } },
+                { $match: { stage: { $nin: ['WON', 'LOST', 'CANCELLED'] } } },
                 { $group: { _id: null, total: { $sum: '$value' } } }
             ]),
-            
+
             // 3. Current Period (CP) Stats
             getPeriodStats(CP),
-            
+
             // 4. Previous Period (PP) Stats
             getPeriodStats(PP)
         ]);
@@ -114,14 +116,15 @@ export const getOverviewReport = async (req, res) => {
             // Base Cumulative Data
             totalLeads: totalLeadsCount,
             pipelineValue: pipelineValue,
-            
+
             // Current Period Data (for display)
             newLeads: currentStats.leadsCreated,
             wonDeals: currentStats.wonDeals,
             lostDeals: currentStats.lostDeals,
+            cancelledDeals: currentStats.cancelledDeals,
             wonValue: currentStats.wonValue,
             winRate: currentStats.winRate,
-            
+
             // Previous Period Data (for comparison trends)
             prevWonValue: previousStats.wonValue,
             prevLeads: previousStats.leadsCreated,
@@ -137,49 +140,55 @@ export const getOverviewReport = async (req, res) => {
 // @route   GET /api/reports/weekly-performance
 export const getWeeklyPerformanceReport = async (req, res) => {
     const sevenDaysAgo = getDateDaysAgo(7);
-    
+
     try {
         const pipeline = [
-            { $match: { 
-                $or: [
-                    { createdAt: { $gte: sevenDaysAgo } }, // For leads
-                    { closedAt: { $gte: sevenDaysAgo } }  // For deals
-                ]
-            }},
+            {
+                $match: {
+                    $or: [
+                        { createdAt: { $gte: sevenDaysAgo } }, // For leads
+                        { closedAt: { $gte: sevenDaysAgo } }  // For deals
+                    ]
+                }
+            },
             {
                 $facet: {
                     dailyLeads: [
                         { $match: { isDeleted: false } },
-                        { $group: {
-                            _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-                            leads: { $sum: 1 }
-                        }}
+                        {
+                            $group: {
+                                _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                                leads: { $sum: 1 }
+                            }
+                        }
                     ],
                     dailyRevenue: [
                         { $match: { stage: 'WON' } },
-                        { $group: {
-                            _id: { $dateToString: { format: "%Y-%m-%d", date: "$closedAt" } },
-                            sales: { $sum: "$value" }
-                        }}
+                        {
+                            $group: {
+                                _id: { $dateToString: { format: "%Y-%m-%d", date: "$closedAt" } },
+                                sales: { $sum: "$value" }
+                            }
+                        }
                     ]
                 }
             }
         ];
 
         // We run the aggregation on the Deal model for convenience, as it's the central transaction object.
-        const results = await Deal.aggregate(pipeline); 
-        
+        const results = await Deal.aggregate(pipeline);
+
         // --- Merge and Format for 7 Days ---
         const revenueMap = new Map(results[0].dailyRevenue.map(item => [item._id, item.sales]));
         const leadsMap = new Map(results[0].dailyLeads.map(item => [item._id, item.leads]));
-        
+
         const output = [];
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
         for (let i = 6; i >= 0; i--) {
             const date = getDateDaysAgo(i);
             const dateStr = date.toISOString().slice(0, 10);
-            
+
             output.push({
                 name: dayNames[date.getDay()],
                 date: dateStr,
@@ -208,14 +217,14 @@ export const getSalesPerformanceReport = async (req, res) => {
 
     try {
         // FIX: Fetch all active users (Admin, Manager, Sales)
-        const allActiveUsers = await User.find({ status: 'active' }).select('_id name'); 
-        
+        const allActiveUsers = await User.find({ status: 'active' }).select('_id name');
+
         const performancePromises = allActiveUsers.map(async (user) => {
             const userId = user._id;
 
             const leadsAssigned = await Lead.countDocuments({ assignedTo: userId, ...leadsQuery });
             const dealsWon = await Deal.countDocuments({ owner: userId, stage: 'WON', ...closedAtQuery });
-            
+
             const wonValueAggregation = await Deal.aggregate([
                 { $match: { owner: userId, stage: 'WON', ...closedAtQuery } },
                 { $group: { _id: null, total: { $sum: '$value' } } }
@@ -262,13 +271,15 @@ export const getConversionRateReport = async (req, res) => {
         const totalLeadsCreated = await Lead.countDocuments(leadsQuery);
         const dealsWon = await Deal.countDocuments({ stage: 'WON', ...closedAtQuery });
         const dealsLost = await Deal.countDocuments({ stage: 'LOST', ...closedAtQuery });
-        
+        const dealsCancelled = await Deal.countDocuments({ stage: 'CANCELLED', ...closedAtQuery });
+
         const overallConversionRate = totalLeadsCreated > 0 ? ((dealsWon / totalLeadsCreated) * 100).toFixed(2) : 0;
 
         res.json({
             totalLeadsCreated,
             dealsWon,
             dealsLost,
+            dealsCancelled,
             overallConversionRate: parseFloat(overallConversionRate)
         });
     } catch (error) {

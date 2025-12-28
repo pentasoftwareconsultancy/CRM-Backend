@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 
 const DEAL_STAGES = [
-    'NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL_SENT', 
-    'NEGOTIATION', 'WON', 'LOST'
+    'NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL_SENT',
+    'NEGOTIATION', 'WON', 'LOST', 'CANCELLED'
 ];
 
 const DealSchema = new mongoose.Schema({

@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 import { createNotification } from './notification.controller.js'; // <-- CRITICAL IMPORT
 import logger from '../utils/logger.js';
 
-const DEAL_STAGES = ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL_SENT', 'NEGOTIATION', 'WON', 'LOST'];
+const DEAL_STAGES = ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL_SENT', 'NEGOTIATION', 'WON', 'LOST', 'CANCELLED'];
 
 // @desc    Get list of deals with filters (4.1 GET /deals)
 export const getDeals = async (req, res) => {
@@ -63,8 +63,8 @@ export const createDeal = async (req, res) => {
 
         // FR-38: Notify the owner that a new deal was created
         createNotification(
-            deal.owner, 
-            'deal_created', 
+            deal.owner,
+            'deal_created',
             `New deal "${deal.title}" created for lead ${lead.company || lead.name}.`,
             deal._id
         );
@@ -149,7 +149,7 @@ export const updateDealStage = async (req, res) => {
 
     try {
         logger.info('Deal.updateDealStage attempt', { userId: req.user._id, dealId: req.params.id, stage });
-        const deal = await Deal.findById(req.params.id).populate('owner', 'name'); 
+        const deal = await Deal.findById(req.params.id).populate('owner', 'name');
 
         if (!deal) {
             return res.status(404).json({ message: 'Deal not found' });
@@ -158,10 +158,10 @@ export const updateDealStage = async (req, res) => {
         if (req.user.role === 'sales' && deal.owner._id.toString() !== req.user._id.toString()) {
             return res.status(403).json({ message: 'Not authorized to update this deal stage' });
         }
-        
+
         const oldStage = deal.stage;
 
-        if (stage === 'WON' || stage === 'LOST') {
+        if (stage === 'WON' || stage === 'LOST' || stage === 'CANCELLED') {
             return res.status(400).json({ message: 'Use the /close endpoint to finalize deals.' });
         }
 
@@ -171,8 +171,8 @@ export const updateDealStage = async (req, res) => {
         // FR-38: Notify the owner of the stage change
         if (oldStage !== stage) {
             createNotification(
-                deal.owner._id, 
-                'stage_alert', 
+                deal.owner._id,
+                'stage_alert',
                 `Deal "${deal.title}" moved from ${oldStage} to ${stage.replace(/_/g, ' ')}.`,
                 deal._id
             );
@@ -191,11 +191,11 @@ export const updateDealStage = async (req, res) => {
 
 // @desc    Close a deal as WON or LOST (4.6 PATCH /deals/:id/close)
 export const closeDeal = async (req, res) => {
-    const { status, reason } = req.body; 
+    const { status, reason } = req.body;
 
     // Validation Check
-    if (!['WON', 'LOST'].includes(status)) {
-        return res.status(400).json({ message: 'Status must be WON or LOST.' });
+    if (!['WON', 'LOST', 'CANCELLED'].includes(status)) {
+        return res.status(400).json({ message: 'Status must be WON, LOST, or CANCELLED.' });
     }
     if (!reason || reason.trim().length < 3) {
         return res.status(400).json({ message: 'A descriptive reason (min 3 characters) is required to close a deal.' });
@@ -203,7 +203,7 @@ export const closeDeal = async (req, res) => {
 
     try {
         logger.info('Deal.closeDeal attempt', { userId: req.user._id, dealId: req.params.id, status });
-        const deal = await Deal.findById(req.params.id).populate('owner', 'name'); 
+        const deal = await Deal.findById(req.params.id).populate('owner', 'name');
 
         if (!deal) {
             return res.status(404).json({ message: 'Deal not found' });
@@ -221,8 +221,8 @@ export const closeDeal = async (req, res) => {
 
         // FR-38: Notify the owner that the deal has been finalized
         createNotification(
-            deal.owner._id, 
-            'deal_closed', 
+            deal.owner._id,
+            'deal_closed',
             `Deal "${deal.title}" was closed as ${status}. Reason: ${reason}`,
             deal._id
         );
