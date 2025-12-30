@@ -23,7 +23,8 @@ const DealSchema = new mongoose.Schema({
     },
     value: {
         type: Number,
-        required: true
+        required: true,
+        min: [1, 'Value must be greater than zero']
     },
     currency: {
         type: String,

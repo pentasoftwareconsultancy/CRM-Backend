@@ -8,10 +8,10 @@ import logger from '../utils/logger.js';
 export const createNotification = async (userId, type, message, relatedId = null) => {
     // Safety checks
     if (!userId || !message) return;
-    
+
     // Convert ObjectId if necessary, though Mongoose should handle it
-    const recipientId = userId._id || userId; 
-    
+    const recipientId = userId._id || userId;
+
     try {
         await Notification.create({
             user: recipientId,
@@ -30,12 +30,22 @@ export const createNotification = async (userId, type, message, relatedId = null
 // @route   GET /api/notifications
 // @access  Authenticated (user gets their own notifications)
 export const getNotifications = async (req, res) => {
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
     try {
+        const total = await Notification.countDocuments({ user: req.user._id });
         const notifications = await Notification.find({ user: req.user._id })
             .sort({ createdAt: -1 })
-            .limit(20); // Limit to 20 recent notifications
+            .skip(skip)
+            .limit(parseInt(limit));
 
-        res.json(notifications);
+        res.json({
+            data: notifications,
+            total,
+            page: parseInt(page),
+            limit: parseInt(limit)
+        });
     } catch (error) {
         logger.error('Error fetching notifications', { error });
         res.status(500).json({ message: 'Error fetching notifications' });
@@ -52,10 +62,10 @@ export const markNotificationRead = async (req, res) => {
         if (!notification) {
             return res.status(404).json({ message: 'Notification not found' });
         }
-        
+
         // Ensure user owns the notification
         if (notification.user.toString() !== req.user._id.toString()) {
-             return res.status(403).json({ message: 'Not authorized to modify this notification.' });
+            return res.status(403).json({ message: 'Not authorized to modify this notification.' });
         }
 
         notification.isRead = true;

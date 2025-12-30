@@ -168,14 +168,17 @@ export const updateDealStage = async (req, res) => {
         deal.stage = stage;
         await deal.save();
 
-        // FR-38: Notify the owner of the stage change
+        // Notify the owner and the editor (req.user) of the stage change
         if (oldStage !== stage) {
-            createNotification(
-                deal.owner._id,
-                'stage_alert',
-                `Deal "${deal.title}" moved from ${oldStage} to ${stage.replace(/_/g, ' ')}.`,
-                deal._id
-            );
+            const message = `Deal "${deal.title}" moved from ${oldStage} to ${stage.replace(/_/g, ' ')}.`;
+
+            // Notify Owner
+            createNotification(deal.owner._id, 'stage_alert', message, deal._id);
+
+            // Notify Editor (if different from owner)
+            if (deal.owner._id.toString() !== req.user._id.toString()) {
+                createNotification(req.user._id, 'stage_alert', message, deal._id);
+            }
         }
 
         logger.info('Deal.updateDealStage success', { userId: req.user._id, dealId: deal._id, stage: deal.stage });
@@ -219,13 +222,16 @@ export const closeDeal = async (req, res) => {
         deal.closedReason = reason;
         await deal.save();
 
-        // FR-38: Notify the owner that the deal has been finalized
-        createNotification(
-            deal.owner._id,
-            'deal_closed',
-            `Deal "${deal.title}" was closed as ${status}. Reason: ${reason}`,
-            deal._id
-        );
+        // Notify the owner and the editor (req.user) that the deal has been finalized
+        const closedMessage = `Deal "${deal.title}" was closed as ${status}. Reason: ${reason}`;
+
+        // Notify Owner
+        createNotification(deal.owner._id, 'deal_closed', closedMessage, deal._id);
+
+        // Notify Editor (if different from owner)
+        if (deal.owner._id.toString() !== req.user._id.toString()) {
+            createNotification(req.user._id, 'deal_closed', closedMessage, deal._id);
+        }
 
         // FR-26: When a deal is marked "Won", convert lead to customer
         if (status === 'WON') {
