@@ -17,7 +17,7 @@ const userSchema = new mongoose.Schema({
     },
     avatar: {
         type: String,
-        default: '' 
+        default: ''
     },
     password: {
         type: String,
@@ -25,8 +25,8 @@ const userSchema = new mongoose.Schema({
         select: false,
         minlength: [6, 'Password must be at least 6 characters long'] // Enforce minimum length
     },
-   
-    role: { 
+
+    role: {
         type: String,
         enum: ['admin', 'manager', 'sales'],
         default: 'sales'
@@ -38,9 +38,17 @@ const userSchema = new mongoose.Schema({
     },
     phone: {
         type: String,
-        trim: true
+        trim: true,
+        validate: {
+            validator: function (v) {
+                if (!v) return true; // Optional field
+                const digits = v.replace(/[\s-]/g, '');
+                return /^[1-9][0-9]{9}$/.test(digits);
+            },
+            message: props => `${props.value} is not a valid 10-digit phone number (cannot start with 0).`
+        }
     },
-    status: { 
+    status: {
         type: String,
         enum: ['active', 'inactive'],
         default: 'active'

@@ -16,20 +16,28 @@ const LeadSchema = new mongoose.Schema({
         required: [true, 'Email is required'], // Added requirement
         trim: true,
         lowercase: true,
-        match: [/.+@.+\..+/, 'Please fill a valid email address'] 
+        match: [/.+@.+\..+/, 'Please fill a valid email address']
         // unique is handled by indexing and controller logic (FR-12)
     },
     phone: {
         type: String,
         required: [true, 'Phone number is required'], // Added requirement
         trim: true,
+        validate: {
+            validator: function (v) {
+                // Must be 10 digits, cannot start with 0
+                const digits = v.replace(/[\s-]/g, '');
+                return /^[1-9][0-9]{9}$/.test(digits);
+            },
+            message: props => `${props.value} is not a valid phone number! Must be 10 digits and cannot start with 0.`
+        }
     },
     source: {
         type: String,
         enum: ['website', 'referral', 'call', 'other'],
         default: 'other'
     },
-    status: { 
+    status: {
         type: String,
         enum: ['new', 'contacted', 'qualified', 'converted', 'lost'],
         default: 'new'
@@ -37,7 +45,7 @@ const LeadSchema = new mongoose.Schema({
     budget: {
         type: Number,
         default: 0,
-        min: [0, 'Budget cannot be negative'] // Enforce minimum 0
+        min: [1, 'Budget must be greater than zero'] // Enforce minimum 1
     },
     description: {
         type: String
@@ -45,11 +53,11 @@ const LeadSchema = new mongoose.Schema({
     city: {
         type: String
     },
-    assignedTo: { 
+    assignedTo: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     },
-    isDeleted: { 
+    isDeleted: {
         type: Boolean,
         default: false
     }
