@@ -10,19 +10,29 @@ import logger from '../utils/logger.js';
 export const getFollowUps = async (req, res) => {
     const { status, from, to, assignedTo, page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-    const filters = { lead: { $exists: true } }; 
 
-    // CRITICAL FIX: If the frontend requests 'pending' OR 'overdue', we query the DB for the base status 'pending'.
-    if (status === 'pending' || status === 'overdue') {
+    const filters = { lead: { $exists: true } };
+
+    const now = new Date();
+
+    // CRITICAL FIX: Handle 'pending' and 'overdue' as mutually exclusive for pagination accuracy.
+    // Also support multi-status filtering (e.g. status=pending|completed)
+    if (status && status.includes('|')) {
+        const statuses = status.split('|');
+        filters.status = { $in: statuses };
+    } else if (status === 'overdue') {
         filters.status = 'pending';
+        filters.scheduledAt = { $lt: now };
+    } else if (status === 'pending') {
+        filters.status = 'pending';
+        filters.scheduledAt = { $gte: now };
     } else if (status === 'completed') {
         filters.status = 'completed';
     } else {
-        // Default fetching only pending tasks (which includes overdue dynamically)
         filters.status = 'pending';
+        filters.scheduledAt = { $gte: now }; // Default to pending future ones
     }
-    
+
     // Role-based filtering (remains the same)
     if (req.user.role === 'sales') {
         filters.assignedTo = req.user._id;
@@ -36,14 +46,14 @@ export const getFollowUps = async (req, res) => {
         if (from) filters.scheduledAt.$gte = new Date(from);
         if (to) filters.scheduledAt.$lte = new Date(to);
     }
-    
-    let totalFollowUps = 0; 
+
+    let totalFollowUps = 0;
     let followups = [];
 
     try {
         // Fetch data based on the simplified filters
         totalFollowUps = await FollowUp.countDocuments(filters);
-        
+
         followups = await FollowUp.find(filters)
             .sort({ scheduledAt: 1 })
             .skip(skip)
@@ -54,15 +64,15 @@ export const getFollowUps = async (req, res) => {
         // Apply dynamic status classification for the HTTP response
         const result = followups.map(fu => {
             const fuObject = fu.toObject();
-            
+
             // Overdue classification: pending AND schedule time passed
             let isOverdue = fuObject.status === 'pending' && new Date(fuObject.scheduledAt) < new Date();
-            
+
             // Override status in response if overdue
             if (isOverdue) {
                 fuObject.status = 'overdue';
             }
-            
+
             return fuObject;
         });
 
@@ -88,7 +98,7 @@ export const createFollowUp = async (req, res) => {
 
     // Validation Check
     if (!type || !scheduledAt) {
-         return res.status(400).json({ message: 'Type and scheduled date/time are required.' });
+        return res.status(400).json({ message: 'Type and scheduled date/time are required.' });
     }
     if (!mongoose.Types.ObjectId.isValid(leadId)) {
         return res.status(400).json({ message: 'Invalid lead ID format.' });
@@ -126,7 +136,7 @@ export const completeFollowUp = async (req, res) => {
         if (!followUp) {
             return res.status(404).json({ message: 'Follow-up not found' });
         }
-        
+
         // Ensure user is the assigned user, manager, or admin
         if (req.user.role === 'sales' && followUp.assignedTo.toString() !== req.user._id.toString()) {
             return res.status(403).json({ message: 'Not authorized to complete this follow-up' });
@@ -140,7 +150,7 @@ export const completeFollowUp = async (req, res) => {
 
         // Optionally create the next follow-up
         if (nextFollowup && nextFollowup.scheduledAt) {
-             newFollowUp = await FollowUp.create({
+            newFollowUp = await FollowUp.create({
                 lead: followUp.lead,
                 type: nextFollowup.type || 'call', // Default to call if not specified
                 scheduledAt: nextFollowup.scheduledAt,
@@ -148,7 +158,7 @@ export const completeFollowUp = async (req, res) => {
                 assignedTo: followUp.assignedTo // Assign to the same user who completed the task
             });
         }
-        
+
         res.json({
             message: 'Follow-up updated successfully',
             newFollowUp: newFollowUp ? { _id: newFollowUp._id, status: newFollowUp.status } : undefined
@@ -167,7 +177,7 @@ export const getLeadFollowUps = async (req, res) => {
     const followups = await FollowUp.find({ lead: req.params.leadId })
         .sort({ scheduledAt: -1 })
         .populate('assignedTo', 'name');
-    
+
     res.json(followups);
 };
 
@@ -179,7 +189,7 @@ export const getLeadFollowUps = async (req, res) => {
 export const addNote = async (req, res) => {
     const { content } = req.body;
     const leadId = req.params.leadId;
-    
+
     try {
         const note = await Note.create({
             lead: leadId,
@@ -204,7 +214,7 @@ export const getLeadNotes = async (req, res) => {
     const notes = await Note.find({ lead: req.params.leadId })
         .sort({ createdAt: -1 })
         .populate('user', 'name');
-    
+
     res.json(notes);
 };
 
@@ -240,12 +250,12 @@ export const deleteNote = async (req, res) => {
 // @access  Authenticated
 export const getLeadActivities = async (req, res) => {
     const leadId = req.params.leadId;
-    
+
     try {
         // 1. Fetch Follow-up activities (completed ones)
         const completedFollowUps = await FollowUp.find({ lead: leadId, status: 'completed' })
             .populate('assignedTo', 'name');
-            
+
         const followUpActivities = completedFollowUps.map(fu => ({
             type: 'followup_completed',
             message: fu.completedResult || `${fu.type} completed.`,
@@ -255,7 +265,7 @@ export const getLeadActivities = async (req, res) => {
         // 2. Fetch Notes
         const notes = await Note.find({ lead: leadId })
             .populate('user', 'name');
-            
+
         const noteActivities = notes.map(note => ({
             type: 'note_added',
             message: note.content,
@@ -265,16 +275,16 @@ export const getLeadActivities = async (req, res) => {
         // 3. Fetch Lead/Deal history (Requires complex logic/audit logs, simplified here)
         // For simplicity, we just use Lead creation date and latest Deal stage change
         const lead = await Lead.findById(leadId).populate('assignedTo', 'name');
-        
+
         let history = [];
         if (lead) {
-             history.push({
+            history.push({
                 type: 'lead_created',
                 message: `Lead created by ${lead.assignedTo.name}`,
                 createdAt: lead.createdAt
             });
         }
-        
+
         // Combine all activities and sort by date
         const allActivities = [
             ...history,
