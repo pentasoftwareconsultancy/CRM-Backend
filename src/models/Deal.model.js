@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const DEAL_STAGES = [
-    'NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL_SENT',
+    'NEW', 'CONTACTED_LEAD', 'CONTACTED_DEVELOPER', 'QUALIFIED', 'PROPOSAL_SENT',
     'NEGOTIATION', 'WON', 'LOST', 'CANCELLED'
 ];
 

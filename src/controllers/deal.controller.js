@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 import { createNotification } from './notification.controller.js'; // <-- CRITICAL IMPORT
 import logger from '../utils/logger.js';
 
-const DEAL_STAGES = ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL_SENT', 'NEGOTIATION', 'WON', 'LOST', 'CANCELLED'];
+const DEAL_STAGES = ['NEW', 'CONTACTED_LEAD', 'CONTACTED_DEVELOPER', 'QUALIFIED', 'PROPOSAL_SENT', 'NEGOTIATION', 'WON', 'LOST', 'CANCELLED'];
 
 // @desc    Get list of deals with filters (4.1 GET /deals)
 export const getDeals = async (req, res) => {
