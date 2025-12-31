@@ -54,8 +54,18 @@ export const getLeads = async (req, res) => {
                     as: 'notes'
                 }
             },
+
+            // 3. Perform Lookup to Count Deals
+            {
+                $lookup: {
+                    from: 'deals', // Name of the Deal collection in MongoDB
+                    localField: '_id',
+                    foreignField: 'lead',
+                    as: 'deals'
+                }
+            },
             
-            // 3. Populate AssignedTo Details
+            // 4. Populate AssignedTo Details
             {
                 $lookup: {
                     from: 'users',
@@ -67,6 +77,7 @@ export const getLeads = async (req, res) => {
             {
                 $addFields: {
                     notesCount: { $size: "$notes" },
+                    dealsCount: { $size: "$deals" },
                     assignedTo: { $arrayElemAt: ["$assignedToDetails", 0] }
                 }
             },
@@ -100,6 +111,7 @@ export const getLeads = async (req, res) => {
                 lead.assignedTo = null;
             }
             delete lead.notes;
+            delete lead.deals;
             delete lead.assignedToDetails;
             return lead;
         });
