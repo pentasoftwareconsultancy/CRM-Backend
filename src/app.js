@@ -41,7 +41,7 @@ app.use((err, req, res, next) => {
   import('./utils/logger.js').then(mod => {
     const logger = mod.default;
     logger.error('Unhandled error in request pipeline', { stack: err.stack, url: req.originalUrl });
-  }).catch(() => {
+  }).catch((err) => {
     // Fallback
     // If logger cannot be imported, write to stderr as fallback
     process.stderr.write(err.stack + "\n");

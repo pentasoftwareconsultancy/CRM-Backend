@@ -11,10 +11,13 @@ const MONGODB_URI = process.env.MONGODB_URI;
 mongoose.connect(MONGODB_URI)
   .then(() => {
     logger.info('Database connected successfully.');
-    app.listen(PORT, () => {
+    app.listen(PORT, (err) => {
       logger.info(`Server running on port ${PORT}`);
       if (process.env.NODE_ENV === 'test') {
         logger.info('Running in TEST environment.');
+      }
+      if (err) {
+        logger.error(err)
       }
     });
   })

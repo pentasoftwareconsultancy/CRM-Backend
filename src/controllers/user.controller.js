@@ -3,6 +3,7 @@ import cloudinary from '../config/cloudinary.js';
 // 1. IMPORT THE NOTIFICATION HELPER
 import { createNotification } from './notification.controller.js';
 import logger from '../utils/logger.js';
+import { sendUserCredentials } from '../utils/email.js';
 
 // Helper function for filtering (remains the same)
 const buildUserQuery = (query) => {
@@ -124,6 +125,15 @@ export const createUser = async (req, res) => {
     logger.info('User.createUser attempt', { adminId: req.user._id, email, role });
 
     try {
+        // Send email with credentials before creating user
+        try {
+            await sendUserCredentials(email, name, password);
+            logger.info('Credentials email sent', { email });
+        } catch (emailError) {
+            logger.error('Failed to send credentials email', { email, error: emailError });
+            // Continue with user creation even if email fails
+        }
+
         const user = await User.create({
             name, email, password, role, designation, phone
         });
@@ -140,7 +150,7 @@ export const createUser = async (req, res) => {
 
         // Response should exclude the password field (handled by default select: false)
         res.status(201).json({
-            message: 'User created successfully',
+            message: 'User created successfully. Credentials sent to user email.',
             user: user
         });
     } catch (error) {
