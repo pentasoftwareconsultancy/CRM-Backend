@@ -129,6 +129,7 @@ Notes:
 **Notifications (brief)**
 - GET `/api/notifications` → 200: array of notifications
 - PATCH `/api/notifications/:id/read` → 200: `{ message: 'Notification marked as read' }`
+- POST `/api/notifications/check-due-followups` → 200: `{ message: 'Checked X due follow-ups, sent Y notifications' }` (admin/manager only)
 
 ---
 

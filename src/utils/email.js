@@ -56,3 +56,38 @@ export const sendUserCredentials = async (email, name, password) => {
 
   return await sendEmail(email, subject, html);
 };
+
+export const sendNotificationEmail = async (email, name, type, message) => {
+  // Color scheme based on notification type
+  const isUrgent = type === 'followup_due';
+  const colors = isUrgent ? {
+    background: '#fef2f2', // light red
+    border: '#dc2626',     // red-600
+    text: '#991b1b',       // red-800
+    title: '⚠️ CRM Urgent Notification: Follow-up Due'
+  } : {
+    background: '#f0f9ff', // light blue
+    border: '#3b82f6',     // blue-500
+    text: '#1e40af',       // blue-800
+    title: `CRM Notification: ${type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`
+  };
+
+  const subject = colors.title;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: ${isUrgent ? '#dc2626' : '#1e40af'};">${isUrgent ? '⚠️ CRM Urgent Notification' : 'CRM System Notification'}</h2>
+      <p>Dear ${name},</p>
+      <div style="background-color: ${colors.background}; border-left: 4px solid ${colors.border}; padding: 15px; margin: 20px 0;">
+        <p style="margin: 0; color: ${colors.text}; font-weight: ${isUrgent ? 'bold' : 'normal'};">${message}</p>
+      </div>
+      ${isUrgent ? '<p style="color: #dc2626; font-weight: bold;">⚡ This follow-up is overdue! Please take immediate action.</p>' : ''}
+      <p>Please log in to your CRM account to view more details and take necessary actions.</p>
+      <p>You can access the system at: <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}" style="color: ${colors.border};">CRM Dashboard</a></p>
+      <p>Best regards,<br>CRM System</p>
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+      <p style="font-size: 12px; color: #6b7280;">This is an automated notification from the CRM system. Please do not reply to this email.</p>
+    </div>
+  `;
+
+  return await sendEmail(email, subject, html);
+};

@@ -1,7 +1,10 @@
 // src/controllers/notification.controller.js
 
 import Notification from '../models/Notification.model.js';
+import User from '../models/User.model.js';
+import FollowUp from '../models/FollowUp.model.js';
 import logger from '../utils/logger.js';
+import { sendEmail, sendNotificationEmail } from '../utils/email.js';
 // Import FollowUp model if needed for triggering, but we'll focus on routes here.
 
 // Helper function to create notifications (called by other controllers)
@@ -13,12 +16,28 @@ export const createNotification = async (userId, type, message, relatedId = null
     const recipientId = userId._id || userId;
 
     try {
-        await Notification.create({
+        // Create the notification in DB
+        const notification = await Notification.create({
             user: recipientId,
             type,
             message,
             relatedId
         });
+
+        // Get user details for email
+        const user = await User.findById(recipientId).select('name email');
+        if (user && user.email) {
+            try {
+                await sendNotificationEmail(user.email, user.name, type, message);
+                logger.info('Notification email sent', { userId: recipientId, type });
+            } catch (emailError) {
+                logger.error('Failed to send notification email', { userId: recipientId, error: emailError });
+                logger.error(emailError);
+                // Don't fail the notification creation if email fails
+            }
+        }
+
+        return notification;
     } catch (e) {
         // Log error but don't halt main operation
         logger.error(`Failed to create notification for user ${recipientId}`, { message: e.message });
@@ -75,5 +94,45 @@ export const markNotificationRead = async (req, res) => {
     } catch (error) {
         logger.error('Failed to update notification status', { error });
         res.status(400).json({ message: 'Failed to update notification status' });
+    }
+};
+
+// @desc    Check for due follow-ups and send notifications (can be called by cron or manually)
+// @route   POST /api/notifications/check-due-followups
+// @access  Authenticated (admin/manager)
+export const checkDueFollowUps = async (req, res) => {
+    try {
+        const now = new Date();
+        // Find follow-ups that are due (scheduledAt <= now and status = 'pending')
+        const dueFollowUps = await FollowUp.find({
+            status: 'pending',
+            scheduledAt: { $lte: now }
+        }).populate('assignedTo', 'name email').populate('lead', 'name');
+
+        let notificationsSent = 0;
+
+        for (const followUp of dueFollowUps) {
+            if (followUp.assignedTo && followUp.assignedTo.email) {
+                const message = `Follow-up due: ${followUp.type} scheduled for ${followUp.lead?.name || 'Unknown Lead'} at ${new Date(followUp.scheduledAt).toLocaleString()}. Note: ${followUp.note || 'No note'}`;
+                
+                // Check if notification already exists for this follow-up
+                const existingNotification = await Notification.findOne({
+                    user: followUp.assignedTo._id,
+                    type: 'followup_due',
+                    relatedId: followUp._id,
+                    createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Within last 24 hours
+                });
+
+                if (!existingNotification) {
+                    await createNotification(followUp.assignedTo._id, 'followup_due', message, followUp._id);
+                    notificationsSent++;
+                }
+            }
+        }
+
+        res.json({ message: `Checked ${dueFollowUps.length} due follow-ups, sent ${notificationsSent} notifications` });
+    } catch (error) {
+        logger.error('Failed to check due follow-ups', { error });
+        res.status(500).json({ message: 'Failed to check due follow-ups' });
     }
 };
