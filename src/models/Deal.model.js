@@ -45,6 +45,10 @@ const DealSchema = new mongoose.Schema({
     closedReason: { // FR-16: Win/Loss reason tracking
         type: String,
         trim: true
+    },
+    description: {
+        type: String,
+        trim: true
     }
 }, {
     timestamps: true

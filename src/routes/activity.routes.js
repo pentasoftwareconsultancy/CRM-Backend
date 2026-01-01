@@ -1,11 +1,13 @@
 import express from 'express';
-import { 
-    createFollowUp, 
-    getFollowUps, 
+import {
+    createFollowUp,
+    getFollowUps,
     completeFollowUp,
     getLeadFollowUps,
     addNote,
     getLeadNotes,
+    addDealNote,
+    getDealNotes,
     deleteNote,
     getLeadActivities
 } from '../controllers/activity.controller.js';
@@ -21,7 +23,7 @@ router.route('/followups')
 router.patch('/followups/:id/complete', protect, completeFollowUp);
 
 // --- Note Deletion (6.3) ---
-router.delete('/notes/:id', protect, deleteNote); 
+router.delete('/notes/:id', protect, deleteNote);
 
 // --- Lead Specific Activity Routes (5.1, 5.2, 6.1, 6.2, 6.4) ---
 router.route('/leads/:leadId/followups')
@@ -34,5 +36,10 @@ router.route('/leads/:leadId/notes')
 
 router.route('/leads/:leadId/activities')
     .get(protect, getLeadActivities); // 6.4
+
+// --- Deal Specific Activity Routes ---
+router.route('/deals/:dealId/notes')
+    .post(protect, addDealNote)
+    .get(protect, getDealNotes);
 
 export default router;

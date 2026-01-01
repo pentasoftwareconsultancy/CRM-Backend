@@ -207,11 +207,46 @@ export const addNote = async (req, res) => {
     }
 };
 
+// @desc    Add a note to a deal
+// @route   POST /api/deals/:dealId/notes
+// @access  Authenticated
+export const addDealNote = async (req, res) => {
+    const { content } = req.body;
+    const dealId = req.params.dealId;
+
+    try {
+        const note = await Note.create({
+            deal: dealId,
+            user: req.user._id,
+            content
+        });
+
+        res.status(201).json({
+            message: 'Note added successfully',
+            note: note
+        });
+    } catch (error) {
+        logger.error('Error adding deal note', { error });
+        res.status(400).json({ message: error.message });
+    }
+};
+
 // @desc    Get notes for a specific lead (6.2 GET /leads/:leadId/notes)
 // @route   GET /api/leads/:leadId/notes
 // @access  Authenticated
 export const getLeadNotes = async (req, res) => {
     const notes = await Note.find({ lead: req.params.leadId })
+        .sort({ createdAt: -1 })
+        .populate('user', 'name');
+
+    res.json(notes);
+};
+
+// @desc    Get notes for a specific deal
+// @route   GET /api/deals/:dealId/notes
+// @access  Authenticated
+export const getDealNotes = async (req, res) => {
+    const notes = await Note.find({ deal: req.params.dealId })
         .sort({ createdAt: -1 })
         .populate('user', 'name');
 

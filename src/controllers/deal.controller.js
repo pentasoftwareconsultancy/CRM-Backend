@@ -40,15 +40,24 @@ export const getDeals = async (req, res) => {
 
 // @desc    Create a new deal (4.2 POST /deals)
 export const createDeal = async (req, res) => {
-    const { leadId, title, value, currency, stage, expectedCloseDate, owner } = req.body;
-
-    const dealOwner = (req.user.role === 'admin' || req.user.role === 'manager') && owner ? owner : req.user._id;
+    const { leadId, title, value, currency, stage, expectedCloseDate, owner, description } = req.body;
 
     try {
         logger.info('Deal.createDeal attempt', { userId: req.user._id, leadId, title, value });
         const lead = await Lead.findById(leadId);
         if (!lead || lead.isDeleted) {
             return res.status(404).json({ message: 'Lead not found' });
+        }
+
+        // FR-REQ: Default deal assigned to lead owner
+        let dealOwner = owner;
+        if (!dealOwner) {
+            dealOwner = lead.assignedTo || req.user._id;
+        } else {
+            // If owner is provided, only allow admin/manager to override
+            if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+                dealOwner = lead.assignedTo || req.user._id;
+            }
         }
 
         const deal = await Deal.create({
@@ -58,7 +67,8 @@ export const createDeal = async (req, res) => {
             value,
             currency,
             stage: stage || 'NEW',
-            expectedCloseDate
+            expectedCloseDate,
+            description
         });
 
         // FR-38: Notify the owner that a new deal was created
