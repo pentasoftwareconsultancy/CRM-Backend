@@ -8,8 +8,8 @@ import logger from '../utils/logger.js';
 
 const getDateDaysAgo = (days) => {
     const d = new Date();
-    d.setDate(d.getDate() - days);
-    d.setHours(0, 0, 0, 0);
+    d.setUTCDate(d.getUTCDate() - days);
+    d.setUTCHours(0, 0, 0, 0);
     return d;
 };
 
@@ -19,9 +19,9 @@ const getFilterDates = (query = {}) => {
         const from = new Date(query.from);
         const to = new Date(query.to);
 
-        // Normalize to start/end of day to be inclusive
-        from.setHours(0, 0, 0, 0);
-        to.setHours(23, 59, 59, 999);
+        // Normalize to start/end of day in UTC to be inclusive
+        from.setUTCHours(0, 0, 0, 0);
+        to.setUTCHours(23, 59, 59, 999);
 
         const periodLen = to.getTime() - from.getTime();
 
@@ -37,11 +37,13 @@ const getFilterDates = (query = {}) => {
     const now = new Date();
     // Default: Current Period (CP) = last 30 days
     const cpStart = getDateDaysAgo(30);
-    const cpEnd = now; // Now
+    const cpEnd = new Date(now);
+    cpEnd.setUTCHours(23, 59, 59, 999); // Include the full current day in UTC
 
     // Previous Period (PP): 30 days before CP
     const ppStart = getDateDaysAgo(60);
-    const ppEnd = getDateDaysAgo(30);
+    const ppEnd = new Date(getDateDaysAgo(30));
+    ppEnd.setUTCHours(23, 59, 59, 999); // Include the full day in UTC
 
     return {
         CP: { $gte: cpStart, $lte: cpEnd },
@@ -52,18 +54,28 @@ const getFilterDates = (query = {}) => {
 /**
  * Helper to fetch key metrics for a given date range.
  */
-const getPeriodStats = async (periodFilter) => {
+const getPeriodStats = async (periodFilter, userFilter = {}) => {
 
-    // For leads, we check creation date
-    const leadsCreated = await Lead.countDocuments({ createdAt: periodFilter, isDeleted: false });
+    // For leads, we check creation date and apply user filter
+    const leadsCreated = await Lead.countDocuments({ 
+        createdAt: periodFilter, 
+        isDeleted: false,
+        ...userFilter 
+    });
 
-    // For deals, we check closedAt date
-    const dealsWon = await Deal.countDocuments({ stage: 'WON', closedAt: periodFilter });
-    const dealsLost = await Deal.countDocuments({ stage: 'LOST', closedAt: periodFilter });
-    const dealsCancelled = await Deal.countDocuments({ stage: 'CANCELLED', closedAt: periodFilter });
+    // For deals, we check closedAt date and apply owner filter for sales users
+    const dealFilter = { closedAt: periodFilter };
+    if (userFilter.assignedTo) {
+        // For sales users, filter deals by owner (since deals are owned by sales users)
+        dealFilter.owner = userFilter.assignedTo;
+    }
+
+    const dealsWon = await Deal.countDocuments({ stage: 'WON', ...dealFilter });
+    const dealsLost = await Deal.countDocuments({ stage: 'LOST', ...dealFilter });
+    const dealsCancelled = await Deal.countDocuments({ stage: 'CANCELLED', ...dealFilter });
 
     const wonValueAggregation = await Deal.aggregate([
-        { $match: { stage: 'WON', closedAt: periodFilter } },
+        { $match: { stage: 'WON', ...dealFilter } },
         { $group: { _id: null, total: { $sum: '$value' } } }
     ]);
 
@@ -87,6 +99,9 @@ const getPeriodStats = async (periodFilter) => {
 export const getOverviewReport = async (req, res) => {
     const { CP, PP } = getFilterDates(req.query);
 
+    // Apply user-specific filters for sales users
+    const userFilter = req.user.role === 'sales' ? { assignedTo: req.user._id } : {};
+
     try {
         const [
             totalLeadsCount,
@@ -94,20 +109,24 @@ export const getOverviewReport = async (req, res) => {
             currentStats,
             previousStats
         ] = await Promise.all([
-            // 1. Total Leads (Cumulative)
-            Lead.countDocuments({ isDeleted: false }),
+            // 1. Total Leads (Cumulative) - filter by user for sales
+            Lead.countDocuments({ isDeleted: false, ...userFilter }),
 
             // 2. Current Open Pipeline Value (Cumulative, no time filter needed on this aggregate)
+            // Filter deals by owner for sales users
             Deal.aggregate([
-                { $match: { stage: { $nin: ['WON', 'LOST', 'CANCELLED'] } } },
+                { $match: { 
+                    stage: { $nin: ['WON', 'LOST', 'CANCELLED'] },
+                    ...(req.user.role === 'sales' ? { owner: req.user._id } : {})
+                } },
                 { $group: { _id: null, total: { $sum: '$value' } } }
             ]),
 
-            // 3. Current Period (CP) Stats
-            getPeriodStats(CP),
+            // 3. Current Period (CP) Stats - pass user filter
+            getPeriodStats(CP, userFilter),
 
-            // 4. Previous Period (PP) Stats
-            getPeriodStats(PP)
+            // 4. Previous Period (PP) Stats - pass user filter
+            getPeriodStats(PP, userFilter)
         ]);
 
         const pipelineValue = pipelineValueResult[0] ? pipelineValueResult[0].total : 0;
@@ -142,45 +161,45 @@ export const getWeeklyPerformanceReport = async (req, res) => {
     const sevenDaysAgo = getDateDaysAgo(7);
 
     try {
-        const pipeline = [
+        // For sales users, filter by their assigned leads and owned deals
+        const leadFilter = req.user.role === 'sales' ? { assignedTo: req.user._id, isDeleted: false } : { isDeleted: false };
+        const dealFilter = req.user.role === 'sales' ? { owner: req.user._id, stage: 'WON' } : { stage: 'WON' };
+
+        // Get daily leads count
+        const dailyLeads = await Lead.aggregate([
             {
                 $match: {
-                    $or: [
-                        { createdAt: { $gte: sevenDaysAgo } }, // For leads
-                        { closedAt: { $gte: sevenDaysAgo } }  // For deals
-                    ]
+                    createdAt: { $gte: sevenDaysAgo },
+                    ...leadFilter
                 }
             },
             {
-                $facet: {
-                    dailyLeads: [
-                        { $match: { isDeleted: false } },
-                        {
-                            $group: {
-                                _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-                                leads: { $sum: 1 }
-                            }
-                        }
-                    ],
-                    dailyRevenue: [
-                        { $match: { stage: 'WON' } },
-                        {
-                            $group: {
-                                _id: { $dateToString: { format: "%Y-%m-%d", date: "$closedAt" } },
-                                sales: { $sum: "$value" }
-                            }
-                        }
-                    ]
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                    leads: { $sum: 1 }
                 }
             }
-        ];
+        ]);
 
-        // We run the aggregation on the Deal model for convenience, as it's the central transaction object.
-        const results = await Deal.aggregate(pipeline);
+        // Get daily revenue from won deals
+        const dailyRevenue = await Deal.aggregate([
+            {
+                $match: {
+                    closedAt: { $gte: sevenDaysAgo },
+                    ...dealFilter
+                }
+            },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$closedAt" } },
+                    sales: { $sum: "$value" }
+                }
+            }
+        ]);
 
         // --- Merge and Format for 7 Days ---
-        const revenueMap = new Map(results[0].dailyRevenue.map(item => [item._id, item.sales]));
-        const leadsMap = new Map(results[0].dailyLeads.map(item => [item._id, item.leads]));
+        const revenueMap = new Map(dailyRevenue.map(item => [item._id, item.sales]));
+        const leadsMap = new Map(dailyLeads.map(item => [item._id, item.leads]));
 
         const output = [];
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -190,7 +209,7 @@ export const getWeeklyPerformanceReport = async (req, res) => {
             const dateStr = date.toISOString().slice(0, 10);
 
             output.push({
-                name: dayNames[date.getDay()],
+                name: dayNames[date.getUTCDay()],
                 date: dateStr,
                 sales: revenueMap.get(dateStr) || 0,
                 leads: leadsMap.get(dateStr) || 0,
@@ -216,10 +235,13 @@ export const getSalesPerformanceReport = async (req, res) => {
     const closedAtQuery = useDateFilter ? { closedAt: CP } : {};
 
     try {
-        // FIX: Fetch all active users (Admin, Manager, Sales)
-        const allActiveUsers = await User.find({ status: 'active' }).select('_id name');
+        // For sales users, only show their own performance
+        // For managers/admins, show all users' performance
+        const usersToQuery = req.user.role === 'sales' 
+            ? [{ _id: req.user._id, name: req.user.name }]
+            : await User.find({ status: 'active' }).select('_id name');
 
-        const performancePromises = allActiveUsers.map(async (user) => {
+        const performancePromises = usersToQuery.map(async (user) => {
             const userId = user._id;
 
             const leadsAssigned = await Lead.countDocuments({ assignedTo: userId, ...leadsQuery });
@@ -266,6 +288,12 @@ export const getConversionRateReport = async (req, res) => {
     const { CP } = getFilterDates(req.query);
     const leadsQuery = useDateFilter ? { isDeleted: false, createdAt: CP } : { isDeleted: false };
     const closedAtQuery = useDateFilter ? { closedAt: CP } : {};
+
+    // Apply user-specific filters for sales users
+    if (req.user.role === 'sales') {
+        leadsQuery.assignedTo = req.user._id;
+        closedAtQuery.owner = req.user._id;
+    }
 
     try {
         const totalLeadsCreated = await Lead.countDocuments(leadsQuery);

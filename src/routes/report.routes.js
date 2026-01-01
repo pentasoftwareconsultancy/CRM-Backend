@@ -10,7 +10,7 @@ import {
 import { protect, authorize } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
-const reportAuth = [protect, authorize('admin', 'manager')]; // Only Admin/Manager can view reports
+const reportAuth = [protect, authorize('admin', 'manager', 'sales')]; // Only Admin/Manager can view reports
 
 router.route('/reports/overview')
     .get(reportAuth, getOverviewReport); // 8.1
