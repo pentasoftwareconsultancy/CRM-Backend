@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { createNotification } from './notification.controller.js';
 import logger from '../utils/logger.js';
 import csv from 'csv-parser'; // Import CSV parser
+import XLSX from 'xlsx'; // Import Excel parser
 import { Readable } from 'stream'; // Node.js built-in for streams
 
 // @desc    Get all leads with filters and pagination (3.1 GET /leads)
@@ -279,37 +280,56 @@ export const importLeads = async (req, res) => {
     
     const fileBuffer = req.file.buffer;
     const currentUserId = req.user._id;
-    logger.info('Lead.importLeads started', { userId: currentUserId, sizeBytes: fileBuffer.length });
+    const fileName = req.file.originalname.toLowerCase();
+    logger.info('Lead.importLeads started', { userId: currentUserId, sizeBytes: fileBuffer.length, fileName });
+    
     const leadsToInsert = [];
     let successfulImports = 0;
     let failedImports = 0;
 
-    const bufferStream = Readable.from(fileBuffer);
-    
     try {
-        await new Promise((resolve, reject) => {
-            bufferStream
-                .pipe(csv())
-                .on('data', (row) => {
-                    const mappedLead = {
-                        name: row.name ? row.name.trim() : null,
-                        email: row.email ? row.email.trim().toLowerCase() : null,
-                        phone: row.phone ? row.phone.trim() : null,
-                        company: row.company ? row.company.trim() : null,
-                        source: row.source ? row.source.trim().toLowerCase() : 'import',
-                        status: row.status ? row.status.trim().toLowerCase() : 'new',
-                        budget: row.budget ? Number(row.budget) : 0,
-                        assignedTo: currentUserId,
-                    };
-                    
-                    if (mappedLead.name && (mappedLead.email || mappedLead.phone)) {
-                        leadsToInsert.push(mappedLead);
-                    } else {
-                        failedImports++;
-                    }
-                })
-                .on('end', resolve)
-                .on('error', reject);
+        let rows = [];
+
+        // Detect file type and parse accordingly
+        if (fileName.endsWith('.csv')) {
+            // Parse CSV
+            const bufferStream = Readable.from(fileBuffer);
+            rows = await new Promise((resolve, reject) => {
+                const parsedRows = [];
+                bufferStream
+                    .pipe(csv())
+                    .on('data', (row) => parsedRows.push(row))
+                    .on('end', () => resolve(parsedRows))
+                    .on('error', reject);
+            });
+        } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+            // Parse Excel
+            const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            rows = XLSX.utils.sheet_to_json(worksheet);
+        } else {
+            return res.status(400).json({ message: 'Unsupported file format. Please upload a CSV or Excel file (.csv, .xlsx, .xls).' });
+        }
+
+        // Process each row
+        rows.forEach((row) => {
+            const mappedLead = {
+                name: row.name ? row.name.toString().trim() : null,
+                email: row.email ? row.email.toString().trim().toLowerCase() : null,
+                phone: row.phone ? row.phone.toString().trim() : null,
+                company: row.company ? row.company.toString().trim() : null,
+                source: row.source ? row.source.toString().trim().toLowerCase() : 'import',
+                status: row.status ? row.status.toString().trim().toLowerCase() : 'new',
+                budget: row.budget ? Number(row.budget) : 0,
+                assignedTo: currentUserId,
+            };
+            
+            if (mappedLead.name && (mappedLead.email || mappedLead.phone)) {
+                leadsToInsert.push(mappedLead);
+            } else {
+                failedImports++;
+            }
         });
 
         if (leadsToInsert.length > 0) {
