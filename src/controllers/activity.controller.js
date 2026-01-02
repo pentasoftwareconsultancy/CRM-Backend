@@ -113,6 +113,22 @@ export const createFollowUp = async (req, res) => {
             assignedTo: assignedTo || req.user._id // Assign to specified user or self
         });
 
+        // Populate lead details for notification message
+        await followUp.populate('lead', 'name company');
+
+        // Create notification for the assigned user
+        const assignedUserId = assignedTo || req.user._id;
+        const leadName = followUp.lead?.name || 'Unknown Lead';
+        const leadCompany = followUp.lead?.company || '';
+        const scheduledDate = new Date(scheduledAt).toLocaleString();
+
+        await createNotification(
+            assignedUserId,
+            'followup_scheduled',
+            `New ${type} scheduled with ${leadName}${leadCompany ? ` (${leadCompany})` : ''} on ${scheduledDate}`,
+            followUp._id
+        );
+
         res.status(201).json({
             message: 'Follow-up created successfully',
             followup: { _id: followUp._id, status: followUp.status }
